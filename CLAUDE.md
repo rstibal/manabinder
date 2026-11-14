@@ -2,13 +2,13 @@
 
 A single-file web app (`index.html`, vanilla HTML/CSS/JS, no build step) for tracking a physical Magic: The Gathering collection as digital binders. It began as a copy of MegaBinder (Rob's Pokémon binder, `rstibal/megabinder`) and is now a separate code base. Version one deliberately copies MegaBinder's features and look; a friend of Rob's who collects Magic is testing it, and his feedback decides what comes next. Design: `docs/superpowers/specs/2026-11-14-manabinder-design.md`.
 
-- Repo: `rstibal/manabinder` (not created yet). Planned live site: https://rstibal.github.io/manabinder/ (GitHub Pages from `main`; the browser may cache the old page, so test with a `?v=N` query).
+- Repo: `rstibal/manabinder`. Live site: https://rstibal.github.io/manabinder/ (GitHub Pages, deploys on push to `main`; the browser may cache the old page, so test with a `?v=N` query).
 - Card data, pictures and prices: Scryfall (`https://api.scryfall.com`), English only.
 - Storage: browser `localStorage` (`SK` = `mnBinder1` for binders). Cloud sync is optional and off until someone connects a GitHub token: it copies the whole state to a private gist using a classic token with only the `gist` scope. Without it, everything stays on the device.
 
 ## Rules for working here
 
-- Rob reviews every change and says "push it" before anything is committed or pushed. Don't create the GitHub repo or turn on Pages until he says so.
+- Rob reviews every change and says "push it" before anything is committed or pushed.
 - Keep it one file with no dependencies unless asked.
 - Bump `APP_VERSION` in `index.html` (format `YYYY.MM.DD.N`) with every change you push. It shows in the ☁ dialog so a device running a stale cached page can be spotted.
 - Never ask for, enter or print a user's GitHub token.
