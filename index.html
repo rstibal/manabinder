@@ -1,0 +1,2542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ManaBinder</title>
+<meta name="theme-color" content="#0f172a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ManaBinder">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- Requires internet access: card data, pictures and prices come from the Scryfall API -->
+<style>
+/* ── Tokens ──────────────────────────────────────────────── */
+:root {
+  --bg:      #0f172a;
+  --surf:    #1e293b;
+  --surf2:   #334155;
+  --border:  rgba(255,255,255,.1);
+  --acc:     #8b5cf6;
+  --text:    #f1f5f9;
+  --muted:   #94a3b8;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text)}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:var(--surf2);border-radius:3px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.hidden{display:none!important}
+.btn{padding:7px 14px;border-radius:7px;border:none;font-size:.82rem;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}
+.btn-red{background:var(--acc);color:#fff}.btn-red:hover{background:#7c3aed}
+.btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-ghost:hover{background:var(--surf2);color:var(--text)}
+.btn-danger{background:#450a0a;color:#fca5a5;border:1px solid #7f1d1d}.btn-danger:hover{background:#7f1d1d}
+
+/* ── Header ──────────────────────────────────────────────── */
+.header{background:var(--surf);border-bottom:1px solid var(--border);padding:10px 18px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50;flex-wrap:wrap}
+.logo{font-weight:800;font-size:1rem;display:flex;align-items:center;gap:8px;flex-shrink:0;white-space:nowrap}
+.binder-ctrl{display:flex;align-items:center;gap:8px;flex:1;min-width:0;flex-wrap:wrap}
+.binder-sel{background:var(--surf2);border:1px solid var(--border);border-radius:7px;color:var(--text);padding:6px 10px;font-size:.85rem;cursor:pointer;outline:none;max-width:220px}
+.binder-sel:focus{border-color:var(--acc)}
+.chip{background:var(--surf2);border-radius:20px;padding:4px 10px;font-size:.75rem;color:var(--muted)}
+.chip b{color:var(--text)}
+
+/* ── Page ────────────────────────────────────────────────── */
+.viewport{display:flex;justify-content:center;padding:20px 16px 40px;overflow-x:clip}
+.empty-binder{text-align:center;color:var(--muted);padding:80px 20px;flex:1}
+.empty-binder h2{color:var(--text);margin:12px 0 6px}
+.binder-wrap{flex:1;max-width:920px}
+.nav-btn.add{border-style:dashed;color:var(--muted)}.nav-btn.add:hover{border-color:var(--acc);color:var(--text)}
+.pg-rm{background:transparent;border:none;color:var(--muted);font-size:.75rem;cursor:pointer;padding:4px 8px;margin-right:4px;text-decoration:underline}
+.pg-rm:hover{color:#fca5a5}
+.pg-bar{flex-wrap:wrap;display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}
+.pg-title{font-size:1.05rem;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pager{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.pg-label{font-size:.8rem;color:var(--muted);min-width:84px;text-align:center}
+.nav-btn{background:transparent;border:1px solid var(--border);color:var(--text);border-radius:7px;width:34px;height:34px;font-size:1.2rem;line-height:1;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center}
+.nav-btn:hover:not(:disabled){background:var(--surf2)}.nav-btn:disabled{opacity:.25;cursor:default}
+
+.lbl,.sect,.pbar{display:none}
+.sect-add{display:none}
+.pg-sub{font-size:.78rem;color:var(--muted);margin-top:2px}
+.pg-head{min-width:0}
+.pbar{height:5px;border-radius:3px;background:var(--surf2);overflow:hidden;flex-basis:100%}
+.pbar i{display:block;height:100%;width:0;background:#4ade80;border-radius:3px;transition:width .3s}
+.blist{display:none}
+.bitem{display:block;width:100%;text-align:left;background:transparent;border:1px solid transparent;color:var(--muted);border-radius:8px;padding:8px 10px;font-size:.85rem;cursor:pointer}
+.bitem:hover{background:rgba(255,255,255,.05);color:var(--text)}
+.bitem.on{background:var(--surf2);color:var(--text);border-color:var(--border);box-shadow:inset 3px 0 0 var(--acc)}
+.bitem .bt{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.bitem .bt span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.bitem .bn{font-size:.72rem;color:var(--muted);flex-shrink:0}
+.bitem .pbar{display:block;height:3px;margin-top:6px}
+.bitem .pbar i{background:#64748b}.bitem.on .pbar i{background:#4ade80}
+@media (min-width:900px){
+  body{padding-left:230px}
+  .header{position:fixed;left:0;top:0;bottom:0;width:230px;flex-direction:column;align-items:stretch;flex-wrap:nowrap;gap:18px;padding:18px 14px;border-bottom:none;border-right:1px solid var(--border);overflow-y:auto}
+  .binder-ctrl{flex:1;flex-direction:column;align-items:stretch;flex-wrap:nowrap;gap:6px}
+  .binder-sel,.binder-ctrl .btn.b-new{display:none}
+  .blist{display:flex;flex-direction:column;gap:2px;max-height:42vh;overflow-y:auto}
+  .binder-ctrl .btn{display:flex;align-items:center;gap:10px;text-align:left;padding:9px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);color:var(--text)}
+  .binder-ctrl .btn:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.28)}
+  .ico{width:18px;text-align:center;flex-shrink:0}
+  .sync-lbl{flex:1}
+  .sect{display:flex;justify-content:space-between;align-items:center;font-size:.66rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);padding:0 4px 0 10px;margin-top:2px}
+  .sect2{margin-top:16px}
+  .sect-add{display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:1rem;line-height:1;cursor:pointer}
+  .sect-add:hover{border-color:var(--acc);color:var(--text);background:rgba(139,92,246,.1)}
+  .binder-ctrl .b-add{background:var(--acc);border-color:var(--acc);color:#fff;justify-content:center}
+  .binder-ctrl .b-add:hover{background:#7c3aed;border-color:#7c3aed}
+  .binder-ctrl .sect:first-child{order:0}
+  .blist{order:1}.sect2{order:3}.b-add{order:4}.b-val{order:5}.b-shop{order:6}.b-set{order:7}
+  .b-install{order:8}
+  .ro-note{order:2}.b-share,.b-rearr,.b-fit{order:6}
+  #sync-btn{order:9;margin-top:auto}
+  .lbl{display:inline}
+  .sync-st{font-size:.7rem;opacity:.85;font-weight:500}
+  .viewport{padding:28px 32px 48px}
+}
+@media (max-width:640px){
+  .header{padding:10px 12px}
+  .binder-ctrl{order:3;flex-basis:100%}
+  .binder-sel{flex:1;max-width:none}
+  .viewport{padding:14px 10px 32px}
+  .nav-btn{width:40px;height:40px}
+  .cg{gap:8px}
+}
+
+/* ── Card Grid & Slots ───────────────────────────────────── */
+.cg{display:grid;gap:12px}
+.slot{aspect-ratio:2.5/3.5;border-radius:8px;position:relative;cursor:pointer;transition:transform .15s,box-shadow .15s}
+.slot-empty{background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;font-size:1.4rem;color:rgba(255,255,255,.2)}
+.slot-empty:hover{background:rgba(139,92,246,.08);border-color:rgba(139,92,246,.5);color:rgba(139,92,246,.7)}
+.slot-filled{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.5)}
+.slot-filled:hover{transform:translateY(-4px);box-shadow:0 8px 22px rgba(0,0,0,.45);z-index:2}
+.slot-filled img{width:100%;height:100%;object-fit:cover;display:block}
+.slot-need img{filter:grayscale(1) brightness(.8);opacity:.5}
+.slot-need{box-shadow:0 0 0 1px rgba(255,255,255,.12) inset!important;background:rgba(255,255,255,.04)}
+.nbadge{position:absolute;bottom:4px;left:50%;transform:translateX(-50%);z-index:2;font-size:.55rem;font-weight:800;letter-spacing:.6px;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:rgba(15,23,42,.85);color:#e2e8f0;white-space:nowrap}
+.chip-need b{color:#fbbf24}
+#sync-btn{padding:6px 10px}
+#sync-btn[data-state=idle]{color:#4ade80}
+#sync-btn[data-state=busy]{color:#fbbf24}
+#sync-btn[data-state=error]{color:#f87171;border-color:#7f1d1d}
+.syncp{font-size:.82rem;color:var(--muted);line-height:1.5;margin-bottom:10px}
+.syncp a{color:#93c5fd}
+.syncp b{color:var(--text)}
+.vers{margin:14px 0 0;font-size:.72rem;opacity:.75}
+.sync-stat{font-size:.88rem;margin-bottom:12px}
+.sync-stat.err{color:#fca5a5}
+.bcard.need img{filter:grayscale(1) brightness(.8);opacity:.45}
+/* Shared (read-only) view: hide everything that edits */
+body.ro .b-add,body.ro .b-set,body.ro .b-new,body.ro .sect-add,body.ro #sync-btn,body.ro #install-btn,body.ro #binder-sel,body.ro #blist,body.ro .binder-ctrl .sect:first-child,body.ro #det-own,body.ro #det-rm,body.ro #rm-page,body.ro .b-share{display:none!important}
+body.ro .slot-empty{pointer-events:none}
+body.ro .b-rearr{display:none!important}
+@media (max-width:520px){.s-row{flex-wrap:wrap}.s-row .acw{flex:1 0 100%;min-width:0}}
+/* Rearranging (drag a card onto another slot); off until the lock is opened */
+.b-rearr.on{background:rgba(250,204,21,.14)!important;border-color:#facc15!important;color:#fde68a!important}
+body.rearr .slot-filled{cursor:grab;touch-action:none;box-shadow:0 0 0 1px rgba(250,204,21,.55),0 2px 8px rgba(0,0,0,.5)}
+body.rearr .slot-filled:hover{transform:none}
+body.drag-on,body.drag-on *{cursor:grabbing!important;user-select:none;-webkit-user-select:none}
+.slot.drag-src{opacity:.35}
+.slot.drop-t{outline:2px solid #facc15;outline-offset:2px}
+.nav-btn.drop-t{border-color:#facc15;background:rgba(250,204,21,.14)}
+.drag-ghost{position:fixed;z-index:200;pointer-events:none;width:84px;aspect-ratio:2.5/3.5;border-radius:6px;overflow:hidden;box-shadow:0 10px 28px rgba(0,0,0,.6);transform:translate(-50%,-50%) rotate(3deg);opacity:.92;background:var(--surf2)}
+.drag-ghost img{width:100%;height:100%;object-fit:cover;display:block}
+.ro-note{display:none;font-size:.78rem;color:var(--muted);line-height:1.4;padding:0 4px}
+.ro-note a{color:#93c5fd}
+body.ro .ro-note{display:block}
+.bcard.need{border-color:transparent}
+/* Compact navigation: below the sidebar width (900px), and in fit-to-screen mode at any size, the header
+   gives way to one icon rail with the ball at its head. It runs down the left side, or along the top on
+   narrow screens (nav-bar); nav-s packs the buttons tighter on short or very narrow screens. */
+.rail,.rmenu{display:none}
+body.nav-c{--rw:52px;padding:0 0 0 var(--rw)!important}
+body.nav-c.nav-bar{padding:var(--rw) 0 0!important}
+body.nav-c .header{display:none}
+body.nav-c .rail{display:flex;position:fixed;left:0;top:0;bottom:0;width:var(--rw);flex-direction:column;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;background:var(--surf);border-right:1px solid var(--border);z-index:50;overflow:auto}
+body.nav-bar .rail{right:0;bottom:auto;width:auto;height:var(--rw);flex-direction:row;padding:0 6px;border-right:none;border-bottom:1px solid var(--border)}
+.rgrp{display:flex;flex-direction:column;gap:4px;align-items:center}
+body.nav-bar .rgrp{flex-direction:row;gap:2px}
+.r-logo{flex-shrink:0;width:40px;height:40px;display:flex;align-items:center;justify-content:center}
+.rb{position:relative;flex-shrink:0;width:40px;height:40px;border-radius:8px;border:1px solid transparent;background:transparent;color:var(--text);font-size:1.05rem;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer}
+body.nav-bar .rb{width:34px}
+body.nav-s .rgrp{gap:2px}
+body.nav-s .rb,body.nav-s .r-logo{width:32px;height:32px}
+body.nav-s .rail{padding:4px;gap:4px}
+.rb:hover:not(:disabled){background:var(--surf2)}
+.rb:disabled{opacity:.25;cursor:default}
+.rb.on{background:var(--surf2);border-color:var(--border)}
+.rb.add{border:1px dashed var(--border);color:var(--muted)}
+.rb.dot::after{content:'';position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%;background:var(--acc)}
+.rb.drop-t{border-color:#facc15;background:rgba(250,204,21,.14)}
+.rb select{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.rpg{font-size:.7rem;color:var(--muted);text-align:center;line-height:1.25;min-width:36px}
+.rpg i{display:block;font-style:normal}
+body.nav-bar .rpg{min-width:0;padding:0 2px}
+body.nav-bar .rpg i{display:inline}
+.r-fit,.r-unfit{display:none}
+body:not(.fit) .r-fit,body.fit .r-unfit{display:flex}
+body:not(.fit) .r-fitonly{display:none}
+body.fit.nav-bar .r-sec,body.fit.nav-s .r-sec{display:none}
+.rmenu .m-sec,.rmenu .m-ro{display:none}
+body.fit.nav-bar .rmenu .m-sec,body.fit.nav-s .rmenu .m-sec,body.ro .rmenu .m-ro{display:flex}
+body.nav-c .rmenu.on{display:flex;flex-direction:column;gap:2px;position:fixed;z-index:60;min-width:190px;padding:6px;background:var(--surf);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.rmenu button,.rmenu a{display:flex;align-items:center;gap:10px;background:transparent;border:none;color:var(--text);font-size:.85rem;text-align:left;padding:9px 10px;border-radius:7px;cursor:pointer;text-decoration:none}
+.rmenu button:hover,.rmenu a:hover{background:var(--surf2)}
+.rmenu .m-st{margin-left:auto;font-size:.72rem;color:var(--muted)}
+.rmenu .ro-note{display:none}
+body.ro .rmenu .ro-note{display:block;padding:6px 10px 8px;max-width:230px}
+body.ro .r-add,body.ro .r-lock,body.ro .r-bind,body.ro .rmenu .m-edit{display:none!important}
+/* Fit to screen: the whole page sized to the window, the page bar and find bar folded into the rail */
+body.fit{padding:0!important;overflow:hidden;overscroll-behavior:none}
+body.fit .pg-bar,body.fit .fbar{display:none}
+body.fit .viewport{position:fixed;top:0;right:0;bottom:0;left:var(--rw);padding:6px;align-items:center}
+body.fit.nav-bar .viewport{left:0;top:var(--rw)}
+body.fit .binder-wrap{flex:none;max-width:none}
+body.fit .slot-filled:hover{transform:none}
+body.fit.fit-find .fbar{display:flex;position:fixed;top:8px;left:calc(var(--rw) + 8px);right:8px;z-index:60;margin:0;padding:8px;background:var(--surf);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+body.fit.nav-bar.fit-find .fbar{left:8px;top:calc(var(--rw) + 8px)}
+
+/* ── Finish looks: static, no motion ─────────────────────── */
+/* Foil: light diagonal stripes and a pale frame. Etched: a silver-and-gold double frame with a faint sheen. */
+.f-foil::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(115deg,transparent 0 12px,rgba(255,255,255,.14) 12px 22px),linear-gradient(135deg,rgba(96,165,250,.18),rgba(167,139,250,.16),rgba(52,211,153,.16));box-shadow:inset 0 0 0 3px rgba(196,181,253,.6);mix-blend-mode:screen;pointer-events:none;z-index:1}
+.f-etched::before{content:'';position:absolute;inset:0;background:linear-gradient(160deg,rgba(255,255,255,.12),transparent 45%,rgba(253,230,138,.1));box-shadow:inset 0 0 0 2px rgba(226,232,240,.7),inset 0 0 0 5px rgba(251,191,36,.4);mix-blend-mode:screen;pointer-events:none;z-index:1}
+
+/* ── Finish badge ────────────────────────────────────────── */
+.fbadge{position:absolute;top:4px;right:4px;font-size:.44rem;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:2px 5px;border-radius:3px;z-index:3;pointer-events:none;line-height:1.4}
+.fb-foil{background:rgba(139,92,246,.9);color:#fff}
+.fb-etched{background:rgba(226,232,240,.92);color:#1e293b}
+
+/* Landscape pictures (planes, some battles) sit whole in the upright slot */
+img.land{object-fit:contain!important;background:#0b1220}
+
+/* ── Placeholder (no image) ──────────────────────────────── */
+.ph{width:100%;height:100%;background:linear-gradient(135deg,#475569,#64748b);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:6px;color:rgba(255,255,255,.8)}
+.ph-n{font-size:.65rem;font-weight:700}.ph-s{font-size:.55rem;opacity:.7;margin-top:2px}
+
+/* ── Modals ──────────────────────────────────────────────── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px;backdrop-filter:blur(4px);overflow-y:auto}
+.overlay.hidden{display:none}
+.modal{margin:auto;background:var(--surf);border:1px solid var(--border);border-radius:16px;padding:24px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,.75)}
+.modal h2{font-size:1.05rem;margin-bottom:16px}
+.mfoot{display:flex;gap:8px;margin-top:20px}.mfoot .btn{flex:1;padding:10px}
+.fg{margin-bottom:13px}
+.fg label{display:block;font-size:.72rem;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.8px}
+.fi{width:100%;padding:9px 12px;background:var(--surf2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.9rem;outline:none}
+.fi:focus{border-color:var(--acc)}
+
+/* ── Add Card modal ──────────────────────────────────────── */
+.m-add{max-width:600px;max-height:90vh;overflow-y:auto}
+.s-row{display:flex;gap:8px;margin-bottom:12px}
+.s-row .fi{flex:1}
+.acw{flex:1;position:relative}
+.acdrop{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--surf);border:1px solid var(--border);border-radius:8px;max-height:210px;overflow-y:auto;z-index:20;box-shadow:0 8px 24px rgba(0,0,0,.55)}
+.acdrop.hidden{display:none}
+.acitem{padding:7px 12px;cursor:pointer;font-size:.8rem;display:flex;align-items:center;gap:8px}
+.acitem:hover{background:var(--surf2)}
+.acitem img{width:22px;height:14px;object-fit:contain}
+.status{font-size:.78rem;color:var(--muted);min-height:18px;margin-bottom:8px}
+.rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px;max-height:260px;overflow-y:auto;margin-bottom:14px}
+.rc{aspect-ratio:2.5/3.5;border-radius:6px;overflow:hidden;border:2px solid transparent;cursor:pointer;transition:all .12s;background:var(--surf2);position:relative}
+.rc:hover{border-color:rgba(139,92,246,.5);transform:scale(1.04)}.rc.sel{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+.rc img{width:100%;height:100%;object-fit:cover}
+.rcv{position:absolute;top:4px;right:4px;z-index:2;font-size:.5rem;font-weight:800;line-height:1;padding:3px 4px;border-radius:4px;background:#7c3aed;color:#fff;white-space:nowrap}
+.rcv-etched{background:#64748b}
+.rcset b{display:block;font-size:.5rem;color:#fff}
+.rcset{position:absolute;bottom:0;left:0;right:0;font-size:.43rem;background:rgba(0,0,0,.78);color:rgba(255,255,255,.9);padding:2px 3px;text-align:center;line-height:1.3}
+.selaera{display:flex;gap:14px;background:var(--surf2);border-radius:10px;padding:14px;margin-bottom:14px}
+.selaera.hidden{display:none}
+.selimg{width:78px;flex-shrink:0;border-radius:6px;aspect-ratio:2.5/3.5;object-fit:cover;box-shadow:0 2px 10px rgba(0,0,0,.4)}
+.selinfo h4{font-size:.9rem;margin-bottom:3px}
+.selinfo p{font-size:.73rem;color:var(--muted);line-height:1.5}
+.vlabel{font-size:.71rem;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin:10px 0 6px}
+.vopts{display:flex;flex-wrap:wrap;gap:6px}
+.vopt{padding:5px 10px;border-radius:6px;border:1px solid var(--border);font-size:.74rem;font-weight:600;cursor:pointer;background:var(--surf);color:var(--text);transition:all .12s}
+.vopt:hover,.vopt.on{background:var(--acc);border-color:var(--acc);color:#fff}
+
+/* ── Detail modal ────────────────────────────────────────── */
+.m-det{max-width:420px}
+@media (max-width:640px){.m-det{padding:16px}.m-det .mfoot{margin-top:12px}.overlay{padding:10px}}
+.fbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.fsearch{position:relative;flex:1;min-width:200px}
+.fsearch input{width:100%;background:var(--surf);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:9px 34px 9px 12px;font-size:.88rem;outline:none}
+.fsearch input:focus{border-color:var(--acc)}
+.fclear{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:24px;height:24px;border-radius:50%;border:none;background:var(--surf2);color:var(--text);font-size:1rem;line-height:1;cursor:pointer}
+.fseg{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.fseg button{background:transparent;border:none;color:var(--muted);padding:9px 14px;font-size:.82rem;font-weight:600;cursor:pointer;border-right:1px solid var(--border)}
+.fseg button:last-child{border-right:none}
+.fseg button:hover{background:rgba(255,255,255,.05);color:var(--text)}
+.fseg button.on{background:var(--surf2);color:var(--text)}
+.fseg i{font-style:normal;font-weight:500;opacity:.7;margin-left:2px}
+.pos{position:absolute;top:4px;left:4px;z-index:3;font-size:.55rem;font-weight:700;padding:2px 5px;border-radius:4px;background:rgba(15,23,42,.88);color:#cbd5e1;pointer-events:none}
+.nomatch{grid-column:1/-1;text-align:center;color:var(--muted);padding:60px 10px;font-size:.9rem}
+.detimgw{position:relative;width:min(100%,340px,max(140px,calc((100vh - 330px)*.714)));width:min(100%,340px,max(140px,calc((100dvh - 330px)*.714)));aspect-ratio:2.5/3.5;border-radius:10px;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.55);margin:0 auto 16px}
+.detnav{display:flex;align-items:center;justify-content:center;gap:8px;margin:-4px 0 12px}
+.detflip{padding:6px 12px;margin-left:6px}
+.dettype{font-size:.78rem;color:var(--text);opacity:.85;margin-top:3px}
+.detimg{width:100%;height:100%;object-fit:cover;display:block}
+.detimgw.need .detimg{filter:grayscale(1) brightness(.8);opacity:.5}
+.detinfo{text-align:center;margin-bottom:4px}.detinfo h3{font-size:1.05rem}.detinfo p{font-size:.78rem;color:var(--muted);margin-top:4px}
+.cfm{text-align:center}
+.cfm-ico{width:46px;height:46px;border-radius:50%;background:rgba(139,92,246,.15);color:#f87171;font-size:1.5rem;font-weight:800;display:flex;align-items:center;justify-content:center;margin:0 auto 12px}
+.cfm h2{margin-bottom:8px}
+.cfm-body{font-size:.88rem;color:var(--muted);line-height:1.55;margin-bottom:14px}
+.cfm-body b{color:var(--text)}
+.cfm-body .cfm-warn{display:block;margin-top:8px;color:#fbbf24}
+.cfm-lbl{display:block;font-size:.8rem;color:var(--muted);margin-bottom:6px}
+.cfm-lbl b{color:var(--text)}
+.cfm.stack .mfoot{flex-direction:column-reverse}
+.cfm-alt{border-color:rgba(255,255,255,.28)!important;color:var(--text)!important}
+.cfm-cmp{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;text-align:left;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:.82rem}
+.cfm-cmp span{color:var(--muted)}
+.cfm-opt{display:block;font-size:.8rem;color:var(--muted);text-align:left;margin-bottom:6px}
+.cfm-opt b{color:var(--text)}
+#cfm-ok:disabled{opacity:.35;cursor:not-allowed}
+.ctx{position:fixed;z-index:200;min-width:200px;max-width:260px;background:var(--surf);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.65);padding:4px}
+.ctx .hd{font-size:.72rem;color:var(--muted);padding:7px 12px 5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ctx button{display:flex;align-items:center;gap:10px;width:100%;background:transparent;border:none;color:var(--text);padding:10px 12px;border-radius:7px;font-size:.88rem;text-align:left;cursor:pointer}
+.ctx button:hover,.ctx button:focus-visible{background:var(--surf2);outline:none}
+.ctx button.danger{color:#fca5a5}
+.ctx .ico{width:18px;text-align:center;flex-shrink:0}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:150;display:flex;align-items:center;gap:16px;background:var(--surf2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;box-shadow:0 10px 30px rgba(0,0,0,.6);font-size:.85rem;max-width:calc(100vw - 24px)}
+.toast button{background:none;border:none;color:#93c5fd;font-weight:700;font-size:.85rem;cursor:pointer;padding:2px 4px}
+.m-shop{max-width:560px}
+.shop-tools{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:10px 0}
+.shop-tools label{font-size:.8rem;color:var(--muted);display:flex;align-items:center;gap:8px}
+.shop-tools select{background:var(--surf2);border:1px solid var(--border);border-radius:7px;color:var(--text);padding:6px 8px;font-size:.82rem}
+.shop-tools .btn{padding:7px 12px}
+.shop-list{max-height:50vh;overflow-y:auto;margin:0 -4px;padding:0 4px}
+.shop-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.07)}
+.shop-main{min-width:0;font-size:.88rem}
+.shop-main span{display:block;font-size:.74rem;color:var(--muted);margin-top:2px}
+.shop-price{text-align:right;flex-shrink:0;font-size:.85rem;display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.shop-price span{color:var(--muted);font-size:.74rem}
+.shop-price a{color:#93c5fd;font-weight:600;font-size:.78rem;text-decoration:none}
+.shop-price a:hover{text-decoration:underline}
+.vtot{display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-size:.9rem;margin-bottom:14px}
+.vtot span{color:var(--muted)}.vtot b{text-align:right}
+.vtot .vsum{border-top:1px solid var(--border);padding-top:8px;color:var(--text);font-weight:700}
+.vtop{font-size:.8rem;margin-bottom:12px}
+.vtop h4{font-size:.7rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.vrow{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+.vrow span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vrow.need span:first-child{color:var(--muted)}
+.vnote{font-size:.72rem;color:var(--muted);line-height:1.5}
+.vbar{height:6px;border-radius:3px;background:var(--surf2);overflow:hidden;margin:10px 0 6px}
+.vbar i{display:block;height:100%;width:0;background:#4ade80;transition:width .2s}
+.detprice{text-align:center;font-size:.8rem;color:var(--muted);margin:2px 0 10px;min-height:38px;line-height:1.5}
+.detprice b{color:var(--text);font-size:1rem}
+.detprice a{display:inline-block;margin-top:4px;color:#93c5fd;font-weight:600;text-decoration:none}
+.detprice a:hover{text-decoration:underline}
+.detvar{text-align:center;font-size:.8rem;font-weight:600;margin-top:6px;color:#f59e0b;min-height:20px}
+
+/* ── New Binder modal ────────────────────────────────────── */
+.m-new{max-width:400px}
+.presets{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pre{padding:10px 6px;border-radius:8px;border:1px solid var(--border);background:var(--surf2);color:var(--text);cursor:pointer;text-align:center;font-size:.78rem;transition:all .12s}
+.pre b{display:block;font-size:.98rem;margin-bottom:2px}.pre.on,.pre:hover{background:var(--acc);border-color:var(--acc);color:#fff}
+
+/* ── Settings modal ──────────────────────────────────────── */
+.m-set{max-width:420px}
+.ssec{margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid var(--border)}.ssec:last-child{border:none;margin:0;padding:0}
+.ssec h3{font-size:.74rem;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:10px}
+.dimrow{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-end}
+.dimg label{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;display:block;margin-bottom:6px}
+.dimctrl{display:flex;align-items:center;gap:10px}
+.dimbtn{width:30px;height:30px;border-radius:6px;border:1px solid var(--border);background:var(--surf2);color:var(--text);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .12s}
+.dimbtn:hover{border-color:var(--acc);background:var(--surf)}
+.dimv{width:32px;text-align:center;font-size:1.1rem;font-weight:700}
+.perpg{align-self:flex-end;padding-bottom:3px;font-size:.8rem;color:var(--muted)}.perpg b{color:var(--text);font-size:1rem}
+
+/* ── Spinner ─────────────────────────────────────────────── */
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{width:13px;height:13px;border:2px solid var(--border);border-top-color:var(--acc);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle;margin-right:5px}
+
+/* ── Bulk add modal ──────────────────────────────────────── */
+.m-bulk{max-width:740px;max-height:92vh;overflow-y:auto}
+.bulk-top{display:flex;gap:8px;margin-bottom:12px;align-items:flex-start}
+.bulk-top .acw{flex:1}
+.bulk-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px}
+.bulk-bar-left{display:flex;gap:6px;align-items:center}
+.bulk-count{font-size:.8rem;color:var(--muted)}.bulk-count b{color:var(--text)}
+.bcg{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px;max-height:380px;overflow-y:auto;padding:12px;background:var(--surf2);border-radius:10px;margin-bottom:12px}
+.bcard{position:relative;aspect-ratio:2.5/3.5;border-radius:6px;overflow:hidden;cursor:pointer;border:2px solid transparent;transition:all .12s;background:#374151}
+.bcard img{width:100%;height:100%;object-fit:cover;display:block}
+.bcard:hover{border-color:rgba(139,92,246,.5);transform:scale(1.03)}
+.bcard.need::before{content:'NEED';position:absolute;top:4px;left:4px;z-index:2;font-size:.5rem;font-weight:800;line-height:1;padding:3px 4px;border-radius:4px;background:rgba(15,23,42,.85);color:#e2e8f0}
+.bcard-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:.55rem;color:rgba(255,255,255,.6);text-align:center;padding:4px;background:#475569}
+.bcard-nm{position:absolute;bottom:0;left:0;right:0;font-size:.42rem;background:rgba(0,0,0,.8);color:rgba(255,255,255,.92);padding:2px 3px;text-align:center;line-height:1.3;z-index:1}
+.bulk-filters.hidden,.bcg.hidden,.bulk-bar.hidden,.chip.hidden{display:none}
+.bulk-filters{background:var(--surf2);border-radius:10px;padding:10px 12px;margin-bottom:10px;display:flex;flex-direction:column;gap:8px}
+.bulk-frow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.bulk-frow>label{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;width:58px;flex-shrink:0}
+.bulk-frow .fi{flex:1;min-width:180px}
+.rchips{display:flex;flex-wrap:wrap;gap:6px;flex:1}
+.rchip{padding:4px 10px;border-radius:999px;border:1px solid var(--border);font-size:.74rem;font-weight:600;cursor:pointer;background:var(--surf);color:var(--muted);transition:all .12s}
+.rchip span{opacity:.7;font-weight:500;margin-left:2px}
+.rchip.on{background:var(--acc);border-color:var(--acc);color:#fff}
+@media (max-width:520px){
+  .bulk-filters{padding:8px 10px;gap:6px}
+  .bulk-frow{flex-direction:column;align-items:stretch;gap:4px}
+  .bulk-frow>label{width:auto}
+  .bulk-frow .fi{min-width:0}
+  .rchips{gap:4px}
+  .rchip{padding:3px 8px;font-size:.7rem}
+  .bcg{max-height:46vh}
+}
+.bulk-none{font-size:.74rem;color:var(--muted);padding:4px 0}
+.bcard[data-fin]{border-color:rgba(139,92,246,.55)}
+.bcard[data-fin]::after{content:attr(data-fin);position:absolute;top:4px;right:4px;z-index:2;font-size:.5rem;font-weight:800;line-height:1;padding:3px 4px;border-radius:4px;background:#7c3aed;color:#fff;text-transform:uppercase}
+.rchip.rev.on{background:#7c3aed;border-color:#7c3aed}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════ HEADER ══════════════════════════ -->
+<header class="header">
+  <div class="logo">
+    <svg width="26" height="26" viewBox="0 0 26 26" xmlns="http://www.w3.org/2000/svg"><circle cx="13" cy="13" r="12" fill="#2e1065"/><circle cx="13" cy="13" r="11.25" fill="none" stroke="#7c3aed" stroke-width="1.5"/><polygon points="9,6 17,6 15,10 11,10" fill="#ede9fe"/><polygon points="9,6 11,10 5,10" fill="#c4b5fd"/><polygon points="17,6 21,10 15,10" fill="#a78bfa"/><polygon points="5,10 11,10 13,20" fill="#8b5cf6"/><polygon points="11,10 15,10 13,20" fill="#a78bfa"/><polygon points="15,10 21,10 13,20" fill="#6d28d9"/></svg>
+    ManaBinder
+  </div>
+  <div class="binder-ctrl">
+    <div class="sect"><span>Binders</span><button class="sect-add" onclick="openNewBinder()" title="New binder" aria-label="New binder">+</button></div>
+    <select class="binder-sel" id="binder-sel" onchange="switchBinder(this.value)"></select>
+    <nav class="blist" id="blist"></nav>
+    <div class="ro-note">Shared binder, view only. It's a snapshot from when the link was made. <a href="./">Open my binders</a></div>
+    <div class="sect sect2"><span>This binder</span></div>
+    <button class="btn btn-ghost b-add" onclick="openBulk()">+ Add by Set</button>
+    <button class="btn btn-ghost b-val" onclick="openValue()" title="Add up the TCGplayer prices for this binder"><span class="ico">$</span><span class="lbl">Binder value</span></button>
+    <button class="btn btn-ghost b-shop" onclick="openShop()" title="Cards you still need, with prices and buy links"><span class="ico">🛒</span><span class="lbl">Shopping list</span></button>
+    <button class="btn btn-ghost b-rearr" id="rearr-btn" onclick="toggleRearr()" title="Layout is locked. Click to unlock and drag cards into new slots"><span class="ico" id="rearr-ico">🔒</span><span class="lbl" id="rearr-lbl">Layout locked</span></button>
+    <button class="btn btn-ghost b-fit" onclick="toggleFit()" title="Fit the whole page on the screen"><span class="ico"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg></span><span class="lbl">Fit to screen</span></button>
+    <button class="btn btn-ghost b-share" onclick="shareBinder()" title="Copy a link to a read-only copy of this binder"><span class="ico">🔗</span><span class="lbl">Share link</span></button>
+    <button class="btn btn-ghost b-set" onclick="openSettings()" title="Binder settings"><span class="ico">⚙️</span><span class="lbl">Binder settings</span></button>
+    <button class="btn btn-ghost b-install hidden" id="install-btn" onclick="installApp()" title="Add ManaBinder to your home screen or desktop"><span class="ico">⤓</span><span class="lbl">Install app</span></button>
+    <button class="btn btn-ghost" id="sync-btn" data-state="off" onclick="openSync()" title="Cloud sync (off)"><span class="ico">☁</span><span class="lbl sync-lbl">Cloud sync</span><span class="lbl sync-st" id="sync-st"></span></button>
+    <button class="btn btn-red b-new" onclick="openNewBinder()">+ New Binder</button>
+  </div>
+</header>
+
+<!-- Compact navigation rail (below 900px wide, and in fit-to-screen mode) -->
+<nav class="rail" id="rail">
+  <div class="rgrp">
+    <div class="r-logo" title="ManaBinder" role="img" aria-label="ManaBinder"><svg width="26" height="26" viewBox="0 0 26 26" xmlns="http://www.w3.org/2000/svg"><circle cx="13" cy="13" r="12" fill="#2e1065"/><circle cx="13" cy="13" r="11.25" fill="none" stroke="#7c3aed" stroke-width="1.5"/><polygon points="9,6 17,6 15,10 11,10" fill="#ede9fe"/><polygon points="9,6 11,10 5,10" fill="#c4b5fd"/><polygon points="17,6 21,10 15,10" fill="#a78bfa"/><polygon points="5,10 11,10 13,20" fill="#8b5cf6"/><polygon points="11,10 15,10 13,20" fill="#a78bfa"/><polygon points="15,10 21,10 13,20" fill="#6d28d9"/></svg></div>
+    <div class="rb r-bind" id="r-bind" title="Switch binder"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="2.5" y="2" width="11" height="12" rx="1.5"/><path d="M5.5 2v12M8 5.5h3.5M8 8h3.5"/></svg><select id="r-sel" onchange="switchBinder(this.value)" aria-label="Switch binder"></select></div>
+    <button class="rb r-fitonly" id="r-find" onclick="toggleFitFind()" title="Find a card or filter Owned / Need" aria-label="Find"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg></button>
+    <button class="rb r-add" onclick="openBulk()" title="Add by set" aria-label="Add by set">+</button>
+    <button class="rb r-sec" onclick="openValue()" title="Binder value" aria-label="Binder value">$</button>
+    <button class="rb r-sec" onclick="openShop()" title="Shopping list" aria-label="Shopping list">🛒</button>
+    <button class="rb r-lock" id="r-lock" onclick="toggleRearr()" title="Layout lock" aria-label="Layout lock">🔒</button>
+    <button class="rb r-more" id="r-more" onclick="toggleRMenu()" title="More" aria-label="More">⋯</button>
+  </div>
+  <div class="rgrp">
+    <button class="rb r-fitonly" id="r-prev" onclick="goPage(-1)" aria-label="Previous page">‹</button>
+    <span class="rpg r-fitonly" id="r-pg"></span>
+    <button class="rb r-fitonly" id="r-next" onclick="nextClick()" aria-label="Next page">›</button>
+    <button class="rb r-fit" onclick="toggleFit()" title="Fit the whole page on the screen" aria-label="Fit to screen"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg></button>
+    <button class="rb r-unfit" onclick="toggleFit()" title="Leave fit to screen" aria-label="Leave fit to screen"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 2v4H2M14 6h-4V2M10 14v-4h4M2 10h4v4"/></svg></button>
+  </div>
+</nav>
+<div class="rmenu" id="rmenu" role="menu">
+  <div class="ro-note">Shared binder, view only. It's a snapshot from when the link was made.</div>
+  <a class="m-ro" href="./"><span class="ico">📚</span>Open my binders</a>
+  <button class="m-sec" onclick="rmGo(openValue)"><span class="ico">$</span>Binder value</button>
+  <button class="m-sec" onclick="rmGo(openShop)"><span class="ico">🛒</span>Shopping list</button>
+  <button class="m-edit" onclick="rmGo(shareBinder)"><span class="ico">🔗</span>Share link</button>
+  <button class="m-edit" onclick="rmGo(openSettings)"><span class="ico">⚙️</span>Binder settings</button>
+  <button class="m-edit" onclick="rmGo(openSync)"><span class="ico">☁</span>Cloud sync<span class="m-st" id="r-sync-st"></span></button>
+  <button class="m-edit hidden" id="r-install" onclick="rmGo(installApp)"><span class="ico">⤓</span>Install app</button>
+  <button class="m-edit" onclick="rmGo(openNewBinder)"><span class="ico">+</span>New binder</button>
+</div>
+
+<!-- ═══════════════════════ VIEWPORT ════════════════════════ -->
+<div class="viewport" id="viewport">
+  <div class="empty-binder" id="empty-msg">
+    <svg width="56" height="56" viewBox="0 0 56 56" opacity=".3" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+      <rect x="6" y="6" width="19" height="20" rx="3"/><rect x="31" y="6" width="19" height="20" rx="3"/>
+      <rect x="6" y="30" width="19" height="20" rx="3"/><rect x="31" y="30" width="19" height="20" rx="3"/>
+    </svg>
+    <h2>No binders yet</h2>
+    <p>Click <strong>+ New Binder</strong> to get started.</p>
+  </div>
+
+  <section class="binder-wrap" id="binder-wrap" style="display:none">
+    <div class="pg-bar">
+      <div class="pg-head"><div class="pg-title" id="pg-bname"></div><div class="pg-sub" id="pg-stats"></div></div>
+      <div class="pager">
+        <button class="pg-rm hidden" id="rm-page" onclick="removePage()" title="Remove this empty page">Remove page</button>
+        <button class="nav-btn" id="prev-btn" onclick="goPage(-1)" disabled aria-label="Previous page">‹</button>
+        <span class="pg-label" id="pg-label">Page 1 of 1</span>
+        <button class="nav-btn" id="next-btn" onclick="nextClick()" disabled aria-label="Next page">›</button>
+      </div>
+    </div>
+    <div class="fbar">
+      <div class="fsearch">
+        <input id="f-q" type="text" name="find-card" placeholder="Find a card: name, type, number, set, rarity…" oninput="onFind()" onkeydown="if(event.key==='Escape'){clearFind();this.blur()}" autocomplete="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true">
+        <button class="fclear hidden" id="f-clear" onclick="clearFind()" aria-label="Clear search">×</button>
+      </div>
+      <div class="fseg" id="f-seg">
+        <button class="on" data-f="all" onclick="setFF('all')">All</button>
+        <button data-f="owned" onclick="setFF('owned')">Owned <i id="fc-owned"></i></button>
+        <button data-f="need" onclick="setFF('need')">Need <i id="fc-need"></i></button>
+      </div>
+    </div>
+    <div class="cg" id="cg"></div>
+  </section>
+</div>
+
+
+<!-- ═══════════════════════ ADD CARD MODAL ══════════════════ -->
+<div class="overlay hidden" id="m-add">
+  <div class="modal m-add">
+    <h2>Add a Card</h2>
+    <div class="s-row">
+      <div class="acw">
+        <input class="fi" id="name-in" placeholder="Card name…" oninput="onNameInput()" onkeydown="nameKey(event)" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <div class="acdrop hidden" id="name-drop"></div>
+      </div>
+      <div class="acw">
+        <input class="fi" id="set-in" placeholder="Filter by set…" oninput="onSetInput()" autocomplete="off">
+        <div class="acdrop hidden" id="set-drop"></div>
+      </div>
+    </div>
+    <div class="status" id="status">Type a card name above to search.</div>
+    <div class="rgrid" id="rg"></div>
+    <div class="selaera hidden" id="sel-area">
+      <img class="selimg" id="sel-img" src="" alt="">
+      <div class="selinfo">
+        <h4 id="sel-name"></h4>
+        <p id="sel-meta"></p>
+        <div class="vlabel">Finish</div>
+        <div class="vopts" id="sel-fin"></div>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-ghost" onclick="closeM('m-add')">Cancel</button>
+      <button class="btn btn-red" id="add-ok" disabled onclick="doAdd()">Add to Binder</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════ DETAIL MODAL ════════════════════ -->
+<div class="overlay hidden" id="m-det">
+  <div class="modal m-det">
+    <div class="detimgw" id="det-wrap"><img class="detimg" id="det-img" src="" alt=""></div>
+    <div class="detnav">
+      <button class="nav-btn" id="det-prev" onclick="detStep(-1)" aria-label="Previous card">‹</button>
+      <span class="pg-label" id="det-pos"></span>
+      <button class="nav-btn" id="det-next" onclick="detStep(1)" aria-label="Next card">›</button>
+      <button class="btn btn-ghost detflip hidden" id="det-flip" onclick="flipDet()">↻ Back</button>
+    </div>
+    <div class="detinfo">
+      <h3 id="det-name"></h3>
+      <p id="det-type" class="dettype hidden"></p>
+      <p id="det-meta"></p>
+    </div>
+    <div class="detvar" id="det-var"></div>
+    <div class="detprice" id="det-price"></div>
+    <div class="mfoot">
+      <button class="btn btn-ghost" onclick="closeM('m-det')">Close</button>
+      <button class="btn btn-ghost" id="det-own"></button>
+      <button class="btn btn-danger" id="det-rm">Remove Card</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════ NEW BINDER MODAL ════════════════ -->
+<div class="overlay hidden" id="m-new">
+  <div class="modal m-new">
+    <h2>Create New Binder</h2>
+    <div class="fg">
+      <label>Name</label>
+      <input class="fi" id="new-name" placeholder="e.g. Dominaria United" autocomplete="off">
+    </div>
+    <div class="fg">
+      <label>Pocket Layout</label>
+      <div class="presets" id="presets">
+        <button class="pre"    data-r="2" data-c="2" onclick="pickPre(this)"><b>2×2</b>4-pocket</button>
+        <button class="pre on" data-r="3" data-c="3" onclick="pickPre(this)"><b>3×3</b>9-pocket</button>
+        <button class="pre"    data-r="4" data-c="3" onclick="pickPre(this)"><b>4×3</b>12-pocket</button>
+        <button class="pre"    data-r="4" data-c="4" onclick="pickPre(this)"><b>4×4</b>16-pocket</button>
+        <button class="pre"    data-r="5" data-c="4" onclick="pickPre(this)"><b>5×4</b>20-pocket</button>
+        <button class="pre"    data-r="6" data-c="6" onclick="pickPre(this)"><b>6×6</b>36-pocket</button>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-ghost" onclick="closeM('m-new')">Cancel</button>
+      <button class="btn btn-red" onclick="doCreate()">Create</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════ SETTINGS MODAL ══════════════════ -->
+<div class="ctx hidden" id="ctx" role="menu"></div>
+<div class="toast hidden" id="toast" role="status"><span id="toast-msg"></span><button id="toast-act"></button></div>
+
+<div class="overlay hidden" id="m-shop">
+  <div class="modal m-shop">
+    <h2>Shopping list</h2>
+    <p class="vnote" id="shop-sum"></p>
+    <div class="shop-tools">
+      <label>Sort
+        <select id="shop-sort" onchange="renderShop()">
+          <option value="price">Price, high to low</option>
+          <option value="order">Binder order</option>
+          <option value="name">Name</option>
+        </select>
+      </label>
+      <button class="btn btn-ghost" id="shop-copy" onclick="copyShop()">Copy list</button>
+    </div>
+    <div class="shop-list" id="shop-list"></div>
+    <div class="mfoot">
+      <button class="btn btn-ghost" onclick="closeM('m-shop')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="m-val">
+  <div class="modal m-set">
+    <h2>Binder value</h2>
+    <div id="val-body"></div>
+    <div class="mfoot">
+      <button class="btn btn-ghost" onclick="closeM('m-val')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="m-sync">
+  <div class="modal m-set">
+    <h2>Cloud Sync</h2>
+    <div id="sync-off">
+      <p class="syncp">Optional. Without it, your binders are saved in this browser only. With it, they stay in sync across your devices through a <b>private GitHub gist</b> in your own GitHub account. There's no server: data goes straight from this page to GitHub.</p>
+      <p class="syncp">1. <a href="https://github.com/settings/tokens/new?scopes=gist&description=manabinder" target="_blank" rel="noopener">Create a token</a> (classic, with only the <b>gist</b> permission).<br>2. Paste it below, here and on each device you use.</p>
+      <input class="fi" id="sync-token" type="text" style="-webkit-text-security:disc" name="gh-sync-key" placeholder="Paste token" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-form-type="other">
+      <p class="syncp" style="margin-top:10px">The token is stored in this browser only. Use one with just the gist permission, and don't connect on a shared computer.</p>
+    </div>
+    <div id="sync-on" class="hidden">
+      <p class="sync-stat" id="sync-status"></p>
+      <p class="syncp">Changes sync automatically a few seconds after you make them, and when you return to this tab. Every save is kept in the gist's revision history on GitHub.</p>
+    </div>
+    <div class="sync-stat err hidden" id="sync-err"></div>
+    <p class="syncp vers">ManaBinder version <b id="app-ver"></b></p>
+    <div class="mfoot">
+      <button class="btn btn-ghost" onclick="closeM('m-sync')">Close</button>
+      <button class="btn btn-red" id="sync-connect" onclick="syncConnect()">Connect</button>
+      <button class="btn btn-red hidden" id="sync-now" onclick="syncNow(true)">Sync now</button>
+      <button class="btn btn-danger hidden" id="sync-off-btn" onclick="syncDisconnect()">Disconnect</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="m-set">
+  <div class="modal m-set">
+    <h2>Binder Settings</h2>
+    <div class="ssec">
+      <h3>Name</h3>
+      <input class="fi" id="set-name" placeholder="Binder name">
+    </div>
+    <div class="ssec">
+      <h3>Grid Size</h3>
+      <div class="dimrow">
+        <div class="dimg">
+          <label>Rows</label>
+          <div class="dimctrl">
+            <button class="dimbtn" onclick="chDim('r',-1)">−</button>
+            <span class="dimv" id="dr">3</span>
+            <button class="dimbtn" onclick="chDim('r',1)">+</button>
+          </div>
+        </div>
+        <div class="dimg">
+          <label>Columns</label>
+          <div class="dimctrl">
+            <button class="dimbtn" onclick="chDim('c',-1)">−</button>
+            <span class="dimv" id="dc">3</span>
+            <button class="dimbtn" onclick="chDim('c',1)">+</button>
+          </div>
+        </div>
+        <div class="perpg">Per page: <b id="dpp">9</b></div>
+      </div>
+    </div>
+    <div class="ssec">
+      <h3>Danger Zone</h3>
+      <button class="btn btn-danger" style="width:100%" onclick="doDelBinder()">Delete This Binder</button>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-ghost" onclick="closeM('m-set')">Cancel</button>
+      <button class="btn btn-red" onclick="doSave()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="m-confirm">
+  <div class="modal m-set cfm">
+    <div class="cfm-ico">!</div>
+    <h2 id="cfm-title"></h2>
+    <p class="cfm-body" id="cfm-body"></p>
+    <div id="cfm-type" class="hidden">
+      <label class="cfm-lbl" for="cfm-input">Type <b id="cfm-word"></b> to confirm</label>
+      <input class="fi" id="cfm-input" autocomplete="off" spellcheck="false" oninput="cfmCheck()" onkeydown="if(event.key==='Enter')confirmOk()">
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-ghost" id="cfm-cancel" onclick="closeM('m-confirm')">Cancel</button>
+      <button class="btn btn-ghost cfm-alt hidden" id="cfm-alt" onclick="confirmAlt()"></button>
+      <button class="btn btn-red" id="cfm-ok" onclick="confirmOk()"></button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════ BULK ADD MODAL ══════════════════ -->
+<div class="overlay hidden" id="m-bulk">
+  <div class="modal m-bulk">
+    <h2>Add by Set</h2>
+    <div class="bulk-top">
+      <div class="acw">
+        <input class="fi" id="bulk-set-in" placeholder="Search for a set by name or code…" oninput="onBulkSetInput()" autocomplete="off">
+        <div class="acdrop hidden" id="bulk-set-drop"></div>
+      </div>
+    </div>
+    <div class="status" id="bulk-status">Search for a set above to load its cards.</div>
+    <div class="bulk-filters hidden" id="bulk-filters">
+      <div class="bulk-frow">
+        <label>Rarity</label>
+        <div class="rchips" id="bulk-rchips"></div>
+      </div>
+      <div class="bulk-frow">
+        <label>Foil</label>
+        <div class="rchips" id="bulk-revchips"></div>
+      </div>
+      <div class="bulk-frow">
+        <label>Numbers</label>
+        <input class="fi" id="bulk-nums" placeholder="e.g. 1-198, 215 (blank = all)" oninput="applyBulkFilters()" autocomplete="off">
+      </div>
+    </div>
+    <div class="bulk-bar hidden" id="bulk-bar">
+      <div class="bulk-bar-left">
+        <button class="btn btn-ghost" style="padding:5px 10px;font-size:.78rem" onclick="markAllBulk(true)" title="Add the whole selection as cards you own; then click the ones you still need">All Owned</button>
+        <button class="btn btn-ghost" style="padding:5px 10px;font-size:.78rem" onclick="markAllBulk(false)" title="Add the whole selection greyed out, as a plan for a set you're just starting">All Needed</button>
+      </div>
+      <span class="bulk-count" id="bulk-sel-count"></span>
+    </div>
+    <div class="bcg hidden" id="bcg"></div>
+    <div class="mfoot">
+      <button class="btn btn-ghost" onclick="closeM('m-bulk')">Cancel</button>
+      <button class="btn btn-red" id="bulk-ok" disabled onclick="doBulkAdd()">Add Selected</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════ JAVASCRIPT ══════════════════════ -->
+<script>
+'use strict';
+
+/* ── Constants ────────────────────────────────────────────── */
+const SF        = 'https://api.scryfall.com';
+const SK        = 'mnBinder1';
+const SK_SETS   = 'mnSets1';
+const SETS_TTL  = 7 * 24 * 60 * 60 * 1000;
+/* Bulk-add rarity chips. Scryfall's 'special' and 'bonus' share the last one. */
+const RARITIES = ['common', 'uncommon', 'rare', 'mythic', 'special'];
+const RARITY_LABEL = { common:'Common', uncommon:'Uncommon', rare:'Rare', mythic:'Mythic', special:'Special', bonus:'Bonus' };
+const rarLabel = r => RARITY_LABEL[r] || (r ? r[0].toUpperCase() + r.slice(1) : '');
+const FL = { nonfoil:'Normal', foil:'Foil', etched:'Etched' };   // finish labels; the finish itself is Scryfall's word
+const FIN_ORDER = ['nonfoil', 'foil', 'etched'];
+/* Not cards you'd put in a binder: tokens, art series and other memorabilia, minigames, digital-only sets */
+const SKIP_SET_TYPES = new Set(['token', 'memorabilia', 'minigame', 'alchemy', 'treasure_chest']);
+
+/* ── App state ────────────────────────────────────────────── */
+let st       = { binders:[], activeId:null };
+const SHARE_TOKEN = (location.hash.match(/^#share=([\w-]+)$/) || [])[1] || '';
+const RO = !!SHARE_TOKEN;   // opened from a share link: read-only
+let pg       = 0;
+let addSlot  = null;   // which slot index we're adding to (null = next empty)
+let selCard  = null;   // card object selected from search
+let tR = 3, tC = 3;   // temp dims for settings modal
+let newPre   = { r:3, c:3 };
+let allSets  = [];
+let setMatches = [];
+let results  = [];
+let nsT = null, ssT = null;  // debounce timers
+
+/* bulk-add state */
+let bulkCards      = [];
+let bulkVisible    = [];   // entry keys ('<cardIdx>:n' the card's own finish / '<cardIdx>:f' an extra foil copy) matching the filters
+let bulkRarOn      = new Set();   // rarity buckets enabled for the cards themselves
+let bulkRevOn      = new Set();   // rarity buckets enabled for extra foil copies
+let bulkNeed       = new Set();   // entry keys greyed out as 'still to get' (added to the binder but not owned)
+let bulkSetMatches = [];
+let bsT            = null;
+
+/* ── Persistence ──────────────────────────────────────────── */
+function load() {
+  if (RO) return;
+  try {
+    const r = localStorage.getItem(SK);
+    if (r) st = JSON.parse(r);
+  } catch {}
+  if (!st.binders) st.binders = [];
+  if (!st.activeId && st.binders.length) st.activeId = st.binders[0].id;
+}
+function save() {
+  if (RO) return;   // a shared view never writes to this browser or syncs
+  st.modified = Math.max(Date.now(), (st.modified || 0) + 1);   // always moves forward, even for two saves in one millisecond
+  try { localStorage.setItem(SK, JSON.stringify(st)); } catch {}
+  queueSync();
+}
+
+/* ── Binder helpers ───────────────────────────────────────── */
+const ab  = () => st.binders.find(b => b.id === st.activeId) || null;
+const spp = b  => b.rows * b.cols;
+
+/* ── Find & filter ───────────────────────────────────────────
+   While a search or Owned/Need filter is active the grid shows only the matching cards (each tagged with its
+   page and slot), in binder order. The page you were on is restored when the filter is cleared. */
+let fq = '', ff = 'all', pgSaved = 0, fBinderId = null, findT = null;
+const filtering = () => !!fq.trim() || ff !== 'all';
+function matchCard(c) {
+  if (!c) return false;
+  if (ff === 'owned' && c.owned === false) return false;
+  if (ff === 'need'  && c.owned !== false) return false;
+  const q = fq.trim().toLowerCase().replace(/#/g, '');
+  if (!q) return true;
+  const hay = [c.name, c.typeLine, c.set, c.setId, rarLabel(c.rarity), c.finish && c.finish !== 'nonfoil' ? FL[c.finish] : ''].join(' ').toLowerCase();
+  const num = String(c.number || '').toLowerCase().replace(/^0+(?=\d)/, '');
+  return q.split(/\s+/).every(w => /^\d+$/.test(w) ? num === w.replace(/^0+(?=\d)/, '') : hay.includes(w) || num === w);
+}
+/* slot indices in the current view, in binder order */
+const viewList = b => b.slots.reduce((a, c, i) => (c && (!filtering() || matchCard(c)) && a.push(i), a), []);
+const pagesNow = b => filtering() ? Math.max(1, Math.ceil(viewList(b).length / spp(b))) : totalPg(b);
+
+function applyFind(was) {
+  const now = filtering();
+  if (now && rearr) { rearr = false; syncRearr(); }   // filtered positions aren't the real layout
+  if (!was && now) { pgSaved = pg; pg = 0; }
+  else if (was && !now) pg = pgSaved;
+  else pg = 0;
+  renderBinder();
+  renderStats();
+}
+function onFind() {
+  clearTimeout(findT);
+  findT = setTimeout(() => { const was = filtering(); fq = document.getElementById('f-q').value; applyFind(was); }, 120);
+}
+function setFF(f) { const was = filtering(); ff = f; applyFind(was); }
+function clearFind() {
+  const was = filtering();
+  document.getElementById('f-q').value = ''; fq = ''; ff = 'all';
+  applyFind(was);
+}
+
+/* Pages needed for the cards: up to the last filled one, plus a spare page after a full one */
+function autoPg(b) {
+  let last = -1;
+  for (let i = 0; i < b.slots.length; i++) if (b.slots[i]) last = i;
+  if (last < 0) return 1;
+  const lp = Math.floor(last / spp(b));
+  const pageSlots = b.slots.slice(lp * spp(b), (lp + 1) * spp(b));
+  const full = pageSlots.length === spp(b) && pageSlots.every(s => s !== null);   // a short slice is not a full page
+  return lp + 1 + (full ? 1 : 0);
+}
+/* b.pages holds pages added on purpose (e.g. to start a new page with empty slots left on the last) */
+const totalPg = b => Math.max(autoPg(b), b.pages || 1);
+function nextClick() {
+  const b = ab(); if (!b) return;
+  if (!RO && !filtering() && pg >= totalPg(b) - 1) addPage(); else goPage(1);
+}
+function addPage() {
+  const b = ab(); if (!b) return;
+  const last = totalPg(b) - 1;
+  if (!b.slots.slice(last * spp(b), (last + 1) * spp(b)).some(Boolean)) {   // the last page has no cards yet
+    pg = last; renderAll();
+    showToast("The last page is still empty, so a new page wasn't added. Fill it first.");
+    return;
+  }
+  b.pages = totalPg(b) + 1;
+  pg = b.pages - 1;
+  save(); renderAll();
+}
+function removePage() {
+  const b = ab(); if (!b) return;
+  const tp = totalPg(b);
+  if (tp <= autoPg(b) || pg !== tp - 1) return;   // only an extra page the user added, and only while on it
+  b.pages = tp - 1;
+  pg = tp - 2;
+  save(); renderAll();
+}
+
+function nextEmpty(b) {
+  for (let i = 0; i < b.slots.length; i++) if (!b.slots[i]) return i;
+  return b.slots.length;
+}
+
+function mkBinder(name, r, c) {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    name, rows: r, cols: c, slots: [], createdAt: Date.now()
+  };
+}
+
+/* ── Scryfall API ─────────────────────────────────────────── */
+/* Scryfall asks for no more than about 10 requests a second, so every call goes through one queue that
+   starts them at least 100 ms apart. 429 and 5xx answers are retried with backoff. */
+let sfNext = 0;
+function sfSlot() {
+  const now = Date.now(), at = Math.max(now, sfNext);
+  sfNext = at + 100;
+  return at > now ? new Promise(res => setTimeout(res, at - now)) : Promise.resolve();
+}
+async function sf(path, opts = {}, tries = 4) {
+  const url = path.startsWith('https://') ? path : SF + path;
+  let last;
+  for (let i = 0; i < tries; i++) {
+    await sfSlot();
+    try {
+      const r = await fetch(url, { ...opts, headers: { Accept: 'application/json', ...(opts.body ? { 'Content-Type': 'application/json' } : {}) } });
+      if (r.ok) return r.json();
+      if (r.status === 404 && url.startsWith(SF + '/cards/search')) return { data: [], has_more: false };   // a search with no matches
+      if (r.status < 500 && r.status !== 429) {
+        let msg = `Scryfall error ${r.status}`;
+        try { msg = (await r.json()).details || msg; } catch {}
+        throw Object.assign(new Error(msg), { final: true });
+      }
+      last = new Error(`Scryfall error ${r.status}`);
+    } catch (e) { if (e.final) throw e; last = e; }
+    await new Promise(res => setTimeout(res, 600 * 2 ** i));
+  }
+  throw last;
+}
+/* every page of a /cards/search (175 cards a page) */
+async function sfAll(path, maxPages = 25) {
+  const out = [];
+  let next = path;
+  for (let i = 0; next && i < maxPages; i++) {
+    const d = await sf(next);
+    out.push(...(d.data || []));
+    next = d.has_more ? d.next_page : null;
+  }
+  return out;
+}
+const searchPath = (q, order = 'released', dir = 'desc') => '/cards/search?' + new URLSearchParams({
+  q: `${q} game:paper`, unique: 'prints', order, dir, include_extras: 'true', include_variations: 'true' });
+
+/* A Scryfall card in the shape the add dialogs use. Pictures: thumb = Scryfall 'small' (146 px, dialog tiles),
+   small = 'normal' (488 px, binder slots), large = 'large' (popup). Double-faced cards (transform, modal
+   double-faced, reversible, battles) have no top-level picture and one per face: the slot shows the front. */
+const imgSet = u => u ? { thumb: u.small || u.normal || '', small: u.normal || u.small || '', large: u.large || u.normal || '' } : null;
+function toCard(j) {
+  const faces = j.card_faces || [];
+  const front = imgSet(j.image_uris || faces[0]?.image_uris);
+  const back = !j.image_uris && faces[1]?.image_uris ? imgSet(faces[1].image_uris) : null;
+  const fins = FIN_ORDER.filter(f => (j.finishes || []).includes(f));
+  return {
+    id: j.id,
+    name: j.name,
+    number: j.collector_number || '',
+    rarity: j.rarity || '',
+    finishes: fins.length ? fins : ['nonfoil'],
+    typeLine: j.type_line || faces.map(f => f.type_line).filter(Boolean).join(' // '),
+    released: j.released_at || '',
+    set: { id: j.set || '', name: j.set_name || '' },
+    images: { ...(front || {}), ...(back ? { back: back.small, backLarge: back.large } : {}) },
+  };
+}
+/* The record saved in a binder slot */
+const newId = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+function entryFrom(c, finish, owned) {
+  return {
+    id:         newId(),
+    scryfallId: c.id,
+    name:       c.name,
+    set:        c.set?.name || '',
+    setId:      c.set?.id   || '',
+    number:     c.number    || '',
+    rarity:     c.rarity    || '',
+    finish,
+    ...(c.typeLine ? { typeLine: c.typeLine } : {}),
+    imageSmall: c.images?.small || '',
+    imageLarge: c.images?.large || '',
+    ...(c.images?.back ? { imageBack: c.images.back, imageBackLarge: c.images.backLarge || c.images.back } : {}),
+    ...(owned === false ? { owned: false } : {}),
+    addedAt:    Date.now(),
+  };
+}
+const cardImg = (c, kind) => (kind === 'large' ? c.imageLarge || c.imageSmall : c.imageSmall || c.imageLarge) || '';
+/* a picture that fails to load becomes the name placeholder instead of a broken-image icon */
+function imgFail(el) {
+  const d = document.createElement('div');
+  d.className = 'ph';
+  d.innerHTML = `<div class="ph-n">${esc(el.alt || '')}</div>`;
+  el.replaceWith(d);
+}
+/* landscape pictures (planes, some battles) are shown whole in the upright slot: shrunk, not rotated or cropped */
+function imgLand(el) { el.classList.toggle('land', el.naturalWidth > el.naturalHeight); }
+
+/* Every printing of a card, newest first. The typed name is matched loosely (fuzzy), then all printings
+   are fetched by the card's oracle id, so names with quotes or punctuation work too. With a set chosen,
+   every card in that set whose name contains the text instead. */
+async function searchPrints(name, setId) {
+  if (setId) {
+    const t = String(name).replace(/["\\]/g, ' ').trim();
+    return (await sfAll(searchPath(`"${t}" e:${setId}`, 'set', 'asc'), 3)).map(toCard);
+  }
+  const one = await sf('/cards/named?' + new URLSearchParams({ fuzzy: name }));
+  const oid = one.oracle_id || one.card_faces?.[0]?.oracle_id;
+  const all = oid ? (await sfAll(searchPath(`oracleid:${oid}`), 6)).map(toCard) : [];
+  return all.length ? all : [toCard(one)];
+}
+
+/* All cards of a set in collector-number order. Kept in memory only: localStorage is shared with MegaBinder
+   on the same origin (one quota for both), so big caches stay out of it. */
+const setCardCache = new Map();
+function fetchSetCards(setId) {
+  if (!setCardCache.has(setId)) {
+    setCardCache.set(setId, sfAll(searchPath(`e:${setId}`, 'set', 'asc')).then(list => list.map(toCard))
+      .catch(e => { setCardCache.delete(setId); throw e; }));
+    if (setCardCache.size > 12) setCardCache.delete(setCardCache.keys().next().value);
+  }
+  return setCardCache.get(setId);
+}
+
+const cardDetailCache = new Map();   // Scryfall id → full Scryfall card (prices, buy link), as a promise
+let searchSeq = 0;
+function cardDetail(id) {
+  if (!cardDetailCache.has(id)) cardDetailCache.set(id, sf(`/cards/${encodeURIComponent(id)}`).catch(e => { cardDetailCache.delete(id); throw e; }));
+  return cardDetailCache.get(id);
+}
+/* Full records for many cards, 75 per /cards/collection request. alive() lets a closed dialog stop the work;
+   onTick(done) reports progress. Ids Scryfall no longer knows come back as null. Results land in cardDetailCache. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+async function fetchDetails(ids, alive = () => true, onTick = () => {}) {
+  const got = new Map(), todo = [];
+  for (const id of ids) {
+    if (!UUID.test(id)) { got.set(id, null); continue; }   // one malformed id makes Scryfall refuse the whole batch
+    if (!cardDetailCache.has(id)) { todo.push(id); continue; }
+    try { got.set(id, await cardDetailCache.get(id)); } catch { todo.push(id); }
+  }
+  let done = got.size;
+  onTick(done);
+  for (let i = 0; i < todo.length && alive(); i += 75) {
+    const chunk = todo.slice(i, i + 75);
+    try {
+      const d = await sf('/cards/collection', { method: 'POST', body: JSON.stringify({ identifiers: chunk.map(id => ({ id })) }) });
+      for (const j of d.data || []) { cardDetailCache.set(j.id, Promise.resolve(j)); got.set(j.id, j); }
+    } catch {}
+    for (const id of chunk) if (!got.has(id)) got.set(id, null);
+    done += chunk.length;
+    if (alive()) onTick(done);
+  }
+  return got;
+}
+
+async function loadSets() {
+  let c = null;
+  try { c = JSON.parse(localStorage.getItem(SK_SETS) || 'null'); } catch {}
+  if (c && Date.now() - c.ts < SETS_TTL) { allSets = c.data; return; }
+  try {
+    const d = await sf('/sets');
+    allSets = (d.data || []).filter(x => !x.digital && !SKIP_SET_TYPES.has(x.set_type) && x.card_count > 0)
+      .sort((a, z) => (z.released_at || '').localeCompare(a.released_at || ''))
+      .map(x => ({ id: x.code, name: x.name }));
+    try { localStorage.setItem(SK_SETS, JSON.stringify({ ts: Date.now(), data: allSets })); } catch {}
+  } catch { allSets = c?.data || []; }
+}
+
+/* ── Render: full app ─────────────────────────────────────── */
+function renderAll() { renderSel(); renderBinder(); renderStats(); }
+
+function renderSel() {
+  const sel = document.getElementById('binder-sel');
+  sel.innerHTML = st.binders.length
+    ? st.binders.map(b =>
+        `<option value="${b.id}"${b.id===st.activeId?' selected':''}>${esc(b.name)} (${b.rows}×${b.cols})</option>`
+      ).join('')
+    : '<option value="">— no binders —</option>';
+  document.getElementById('r-sel').innerHTML = sel.innerHTML;
+  document.getElementById('blist').innerHTML = st.binders.map(b =>
+    {
+      const f = b.slots.filter(Boolean).length, n = b.slots.filter(c => c && c.owned === false).length;
+      return `<button class="bitem${b.id===st.activeId?' on':''}" onclick="switchBinder('${b.id}')"><div class="bt"><span>${esc(b.name)}</span><span class="bn">${n ? `${f - n}/${f}` : f}</span></div><div class="pbar"><i style="width:${f ? Math.round((f - n) / f * 100) : 0}%"></i></div></button>`;
+    }
+  ).join('');
+}
+
+function renderStats() {
+  const b = ab();
+  const filled = b ? b.slots.filter(Boolean).length : 0;
+  const need   = b ? b.slots.filter(c => c && c.owned === false).length : 0;
+  const slots  = b ? totalPg(b) * spp(b) : 0;
+  const bits = [`${filled - need} owned`];
+  if (need) bits.push(`${need} to get`);
+  bits.push(`${filled} of ${slots} slots filled`);
+  document.getElementById('pg-stats').textContent = b ? bits.join(' · ') : '';
+  document.getElementById('fc-owned').textContent = b ? filled - need : '';
+  document.getElementById('fc-need').textContent  = b ? need : '';
+}
+
+function renderBinder() {
+  const b = ab();
+  const wrap  = document.getElementById('binder-wrap');
+  const emp   = document.getElementById('empty-msg');
+  const prev  = document.getElementById('prev-btn');
+  const next  = document.getElementById('next-btn');
+
+  if (!b) {
+    wrap.style.display = 'none'; emp.style.display = '';
+    prev.disabled = next.disabled = true;
+    syncRail(); layout();
+    return;
+  }
+  wrap.style.display = 'block'; emp.style.display = 'none';
+
+  if (fBinderId !== b.id) {   // a different binder: start with no filter
+    fBinderId = b.id; fq = ''; ff = 'all';
+    document.getElementById('f-q').value = '';
+  }
+  const tp = pagesNow(b);
+  if (pg >= tp) pg = tp - 1;
+  if (pg < 0)   pg = 0;
+  document.getElementById('f-clear').classList.toggle('hidden', !fq);
+  document.querySelectorAll('#f-seg button').forEach(x => x.classList.toggle('on', x.dataset.f === ff));
+
+  prev.disabled = pg === 0;
+  const atEnd = !RO && !filtering() && pg >= tp - 1;   // on the last page: the arrow becomes "add a page"
+  next.disabled = filtering() && pg >= tp - 1;
+  next.textContent = atEnd ? '+' : '›';
+  next.title = atEnd ? 'Add a page' : 'Next page';
+  next.setAttribute('aria-label', next.title);
+  next.classList.toggle('add', atEnd);
+  document.getElementById('rm-page').classList.toggle('hidden', !(atEnd && tp > autoPg(b)));
+  const list = viewList(b);
+  document.getElementById('pg-label').textContent = filtering()
+    ? `${list.length} match${list.length === 1 ? '' : 'es'} · ${pg+1}/${tp}`
+    : `Page ${pg+1} of ${tp}`;
+  document.getElementById('pg-bname').textContent = b.name;
+
+  // Card grid
+  const cg   = document.getElementById('cg');
+  cg.style.gridTemplateColumns = `repeat(${b.cols},1fr)`;
+  const per  = spp(b), start = pg * per;
+  if (filtering()) {
+    cg.innerHTML = list.length
+      ? list.slice(start, start + per).map(idx => renderFilled(b.slots[idx], idx, `p${Math.floor(idx / per) + 1} · ${idx % per + 1}`)).join('')
+      : `<div class="nomatch">No cards match${fq.trim() ? ` “${esc(fq.trim())}”` : ''}${ff !== 'all' ? ` in ${ff === 'need' ? 'Need' : 'Owned'}` : ''}.</div>`;
+    syncRail(); layout();
+    return;
+  }
+  cg.innerHTML = Array.from({length: per}, (_, i) => {
+    const idx  = start + i;
+    const card = b.slots[idx] || null;
+    return card ? renderFilled(card, idx) : RO ? '<div class="slot slot-empty"></div>' : `<div class="slot slot-empty" data-idx="${idx}" onclick="openAdd(${idx})">+</div>`;
+  }).join('');
+  syncRail(); layout();
+}
+
+function renderFilled(c, idx, pos) {
+  const need  = c.owned === false;   // planned card: in the binder layout but not collected yet
+  const fin   = !need && c.finish && c.finish !== 'nonfoil' ? c.finish : '';
+  const badge = need ? '<span class="nbadge">Need</span>' : fin ? `<span class="fbadge fb-${esc(fin)}">${esc(FL[fin] || fin)}</span>` : '';
+  const src = cardImg(c, 'small');
+  const imgHtml = src
+    ? `<img src="${esc(src)}" alt="${esc(c.name)}" loading="lazy" onload="imgLand(this)" onerror="imgFail(this)">`
+    : `<div class="ph"><div class="ph-n">${esc(c.name || 'Loading…')}</div><div class="ph-s">${esc(c.set || '')}</div></div>`;
+  return `<div class="slot slot-filled${fin ? ` f-${esc(fin)}` : ''}${need ? ' slot-need' : ''}" data-idx="${idx}" onclick="openDetail(${idx})">${imgHtml}${badge}${pos ? `<span class="pos">${pos}</span>` : ''}</div>`;
+}
+
+/* ── Fit to screen ────────────────────────────────────────── */
+/* The whole page sized to the window, cards keeping their shape, with the icon rail on the left, or along
+   the top when that leaves bigger cards (e.g. a 6×6 binder on a narrow phone). */
+const SK_FIT = 'mnFit1';   // per device, not synced: the Fold wants it, a desktop may not
+let fit = false;
+try { fit = localStorage.getItem(SK_FIT) === '1'; } catch {}
+/* Picks the navigation for the window (re-run on resize, rotation, folding and browser zoom):
+   the labelled sidebar from 900px wide; below that, or in fit mode, the icon rail (nav-c), down the
+   left side or across the top (nav-bar) on narrow screens, packed tighter (nav-s) when short of room. */
+function layout() {
+  const cg = document.getElementById('cg'), b = ab(), cl = document.body.classList;
+  const R = 52, P = 6, W = innerWidth, H = innerHeight;
+  cl.toggle('fit', fit);
+  let bar = W < 560;
+  if (fit && b) {
+    const g = Math.min(W, H) >= 600 ? 6 : 3;
+    const size = (w, h) => Math.min((w - (b.cols - 1) * g) / b.cols, (h - (b.rows - 1) * g) / b.rows * 2.5 / 3.5);
+    const side = size(W - R - 2 * P, H - 2 * P), top = size(W - 2 * P, H - R - 2 * P);
+    bar = top > side;
+    const cw = Math.floor(Math.max(side, top));
+    cg.style.gap = g + 'px';
+    cg.style.width = cw * b.cols + g * (b.cols - 1) + 'px';
+  } else cg.style.width = cg.style.gap = '';
+  const compact = fit || W < 900;
+  cl.toggle('nav-c', compact);
+  cl.toggle('nav-bar', compact && bar);
+  cl.toggle('nav-s', compact && (bar ? W < 420 : H < 560));
+}
+function toggleFit() {
+  fit = !fit;
+  try { localStorage.setItem(SK_FIT, fit ? '1' : '0'); } catch {}
+  document.body.classList.remove('fit-find'); closeRMenu();
+  layout();
+  if (!fit) scrollTo(0, 0);
+}
+/* copy the pager state onto the rail */
+function syncRail() {
+  const prev = document.getElementById('prev-btn'), next = document.getElementById('next-btn');
+  const rp = document.getElementById('r-prev'), rn = document.getElementById('r-next');
+  rp.disabled = prev.disabled; rn.disabled = next.disabled;
+  rn.textContent = next.textContent; rn.title = next.title; rn.setAttribute('aria-label', next.title);
+  rn.classList.toggle('add', next.classList.contains('add'));
+  const b = ab();
+  document.getElementById('r-pg').innerHTML = b ? `${pg + 1}<i>/${pagesNow(b)}</i>` : '';
+  document.getElementById('r-find').classList.toggle('dot', filtering());
+  document.getElementById('r-bind').title = b ? `Switch binder (now: ${b.name})` : 'Switch binder';
+}
+function toggleFitFind() {
+  closeRMenu();
+  if (document.body.classList.toggle('fit-find')) document.getElementById('f-q').focus();
+}
+function toggleRMenu() {
+  const m = document.getElementById('rmenu');
+  if (m.classList.contains('on')) { closeRMenu(); return; }
+  document.body.classList.remove('fit-find');
+  const r = document.getElementById('r-more').getBoundingClientRect();
+  m.classList.add('on');
+  if (document.body.classList.contains('nav-bar')) { m.style.left = Math.max(8, Math.min(r.left, innerWidth - m.offsetWidth - 8)) + 'px'; m.style.top = r.bottom + 6 + 'px'; }
+  else { m.style.left = r.right + 6 + 'px'; m.style.top = Math.max(8, Math.min(r.top, innerHeight - m.offsetHeight - 8)) + 'px'; }
+}
+function closeRMenu() { document.getElementById('rmenu').classList.remove('on'); }
+function rmGo(fn) { closeRMenu(); fn(); }
+addEventListener('resize', layout);
+document.addEventListener('pointerdown', e => {   // a press elsewhere closes the find panel and the ⋯ menu
+  if (!e.target.closest('#rmenu,#r-more')) closeRMenu();
+  if (!e.target.closest('.fbar,#r-find')) document.body.classList.remove('fit-find');
+});
+
+/* ── Navigation ───────────────────────────────────────────── */
+function goPage(d) {
+  const b = ab(); if (!b) return;
+  const to = Math.max(0, Math.min(pagesNow(b) - 1, pg + d));
+  if (to === pg) { renderBinder(); return; }
+  pg = to;
+  turnPage(d);
+}
+/* A quick slide so a page turn is visible even when the two pages look alike: the old page slides out
+   the way it was swiped, the new one slides in (under a fifth of a second; none with reduced motion). */
+let turnTok = 0;
+function turnPage(d) {
+  const cg = document.getElementById('cg'), tok = ++turnTok;
+  cg.getAnimations().forEach(a => a.cancel());   // a quick second turn skips the rest of the first
+  if (!cg.animate || document.hidden || matchMedia('(prefers-reduced-motion: reduce)').matches) { renderBinder(); return; }
+  const out = cg.animate([{ transform: 'none', opacity: 1 }, { transform: `translateX(${-d * 35}%)`, opacity: 0 }], { duration: 80, easing: 'ease-in', fill: 'forwards' });
+  const swap = () => {   // also on a timer, so the page still turns if the browser holds the animation back
+    if (tok !== turnTok) return;
+    turnTok++;
+    renderBinder(); out.cancel();
+    cg.animate([{ transform: `translateX(${d * 35}%)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 100, easing: 'ease-out' });
+  };
+  out.onfinish = swap; setTimeout(swap, 150);
+}
+
+function switchBinder(id) {
+  st.activeId = id; pg = 0; save(); renderAll();
+}
+
+/* ── Add Card modal ───────────────────────────────────────── */
+/* Type a name (Scryfall's autocomplete offers names), pick it, then pick the printing, and its finish when it
+   has more than one. With a set chosen and no name, the set's cards are listed to pick from. */
+const ADD_HINT = 'Type a card name above, or pick a set to browse its cards.';
+let nameMatches = [], acT = null, acSeq = 0, selFin = '', resBrowse = false;
+
+function openAdd(idx) {
+  const b = ab(); if (!b) return;
+  addSlot = (idx !== undefined) ? idx : null;
+  selCard = null; results = []; ++searchSeq; ++acSeq;
+  document.getElementById('name-in').value = '';
+  document.getElementById('set-in').value  = '';
+  document.getElementById('status').textContent = ADD_HINT;
+  document.getElementById('rg').innerHTML = '';
+  document.getElementById('sel-area').classList.add('hidden');
+  document.getElementById('add-ok').disabled = true;
+  document.getElementById('set-drop').classList.add('hidden');
+  document.getElementById('name-drop').classList.add('hidden');
+  openM('m-add');
+  setTimeout(() => document.getElementById('name-in').focus(), 60);
+}
+
+function clearSel() {
+  selCard = null;
+  document.getElementById('sel-area').classList.add('hidden');
+  document.getElementById('add-ok').disabled = true;
+}
+
+function onNameInput() {
+  clearTimeout(nsT); clearTimeout(acT); ++acSeq;
+  const v = document.getElementById('name-in').value.trim();
+  const set = findSet(document.getElementById('set-in').value);
+  if (!v) {
+    document.getElementById('name-drop').classList.add('hidden');
+    if (set) { browseSet(set); return; }
+    ++searchSeq;
+    document.getElementById('status').textContent = ADD_HINT; document.getElementById('rg').innerHTML = ''; clearSel(); return;
+  }
+  if (set) {   // inside a set: list the matching cards straight away
+    document.getElementById('status').innerHTML = '<span class="spin"></span>Searching…';
+    nsT = setTimeout(() => doSearch(v), 380);
+    return;
+  }
+  acT = setTimeout(() => showNameDrop(v), 200);
+}
+
+async function showNameDrop(v) {
+  const seq = ++acSeq, dd = document.getElementById('name-drop');
+  try {
+    const d = await sf('/cards/autocomplete?' + new URLSearchParams({ q: v }));
+    if (seq !== acSeq) return;
+    nameMatches = (d.data || []).slice(0, 12);
+    if (!nameMatches.length) {
+      dd.classList.add('hidden');
+      document.getElementById('status').textContent = v.length < 2 ? ADD_HINT : 'No card names match yet. Press Enter to search anyway.';
+      return;
+    }
+    dd.innerHTML = nameMatches.map((n, i) => `<div class="acitem" onclick="pickName(${i})">${esc(n)}</div>`).join('');
+    dd.classList.remove('hidden');
+    document.getElementById('status').textContent = 'Pick the card from the list, or press Enter.';
+  } catch {}
+}
+
+function pickName(i) {
+  const n = nameMatches[i]; if (!n) return;
+  document.getElementById('name-in').value = n;
+  document.getElementById('name-drop').classList.add('hidden');
+  ++acSeq;
+  doSearch(n);
+}
+
+function nameKey(e) {
+  const dd = document.getElementById('name-drop');
+  if (e.key === 'Escape' && !dd.classList.contains('hidden')) { dd.classList.add('hidden'); e.stopPropagation(); return; }
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const v = e.target.value.trim(); if (!v) return;
+  clearTimeout(acT); clearTimeout(nsT); ++acSeq;
+  dd.classList.add('hidden');
+  doSearch(v);
+}
+
+async function doSearch(name) {
+  const ms  = findSet(document.getElementById('set-in').value);
+  const seq = ++searchSeq;
+  clearSel();
+  document.getElementById('status').innerHTML = `<span class="spin"></span>${ms ? 'Searching…' : 'Finding every printing…'}`;
+  try {
+    const found = await searchPrints(name, ms?.id || '');
+    if (seq !== searchSeq) return;   // a newer search superseded this one
+    results = found; resBrowse = !!ms;
+    renderResults();
+  } catch (e) {
+    if (seq !== searchSeq) return;
+    document.getElementById('status').textContent = e.message || 'Search failed';
+    document.getElementById('rg').innerHTML = '';
+  }
+}
+
+/* The set a "Filter by set" entry names exactly, by its name or its code (e.g. dmu) */
+function findSet(text) {
+  const t = String(text || '').trim().toLowerCase();
+  if (!t) return null;
+  return allSets.find(s => s.name.toLowerCase() === t) || allSets.find(s => s.id === t) || null;
+}
+
+/* No card name entered: list every card of the chosen set to pick from */
+async function browseSet(set) {
+  const seq = ++searchSeq;
+  clearSel();
+  document.getElementById('rg').innerHTML = '';
+  document.getElementById('status').innerHTML = `<span class="spin"></span>Loading ${esc(set.name)}…`;
+  try {
+    const cards = await fetchSetCards(set.id);
+    if (seq !== searchSeq) return;
+    results = cards; resBrowse = true;
+    if (!cards.length) { document.getElementById('status').textContent = `Scryfall lists no paper cards for ${set.name}.`; return; }
+    renderResults();
+    document.getElementById('status').textContent = `${set.name} (${set.id.toUpperCase()}): ${results.length} card${results.length === 1 ? '' : 's'}, click one to select`;
+  } catch (e) {
+    if (seq !== searchSeq) return;
+    document.getElementById('status').textContent = `Couldn't load that set: ${e.message}`;
+  }
+}
+
+function renderResults() {
+  const stat = document.getElementById('status');
+  const rg   = document.getElementById('rg');
+  if (!results.length) { stat.textContent = 'No cards found.'; rg.innerHTML = ''; return; }
+  stat.textContent = resBrowse
+    ? `${results.length} card${results.length > 1 ? 's' : ''}, click one to select`
+    : `${results[0].name}: ${results.length} printing${results.length > 1 ? 's' : ''}, newest first. Click the one you have.`;
+  rg.innerHTML = results.map((c, i) => {
+    const img = c.images?.thumb || '';
+    const only = !c.finishes.includes('nonfoil') ? `<span class="rcv rcv-${esc(c.finishes[0])}">${esc(FL[c.finishes[0]])}</span>` : '';
+    return `<div class="rc${selCard===c?' sel':''}" onclick="pickResult(${i})" title="${esc(`${c.name} · ${c.set.name} #${c.number}`)}">
+      ${img ? `<img src="${esc(img)}" alt="${esc(c.name)}" loading="lazy" onload="imgLand(this)">`
+             : `<div class="ph"><div class="ph-n">${esc(c.name)}</div></div>`}
+      ${only}
+      <div class="rcset"><b>${esc(resBrowse ? c.name : c.set.name)}</b>${esc(c.set.id.toUpperCase())} #${esc(c.number)}</div>
+    </div>`;
+  }).join('');
+}
+
+function showSel() {
+  const c = selCard; if (!c) return;
+  document.getElementById('sel-meta').textContent =
+    [`${c.set?.name || ''} (${(c.set?.id || '').toUpperCase()})`, c.number ? `#${c.number}` : '', rarLabel(c.rarity), c.released.slice(0, 4)]
+      .filter(Boolean).join(' · ');
+  document.getElementById('sel-fin').innerHTML = c.finishes.length > 1
+    ? c.finishes.map(f => `<button class="vopt${f === selFin ? ' on' : ''}" onclick="pickFin('${f}')">${FL[f]}</button>`).join('')
+    : `<span class="vnote">${FL[c.finishes[0]]}${c.finishes[0] === 'nonfoil' ? '' : ' only'}</span>`;
+}
+function pickResult(i) {
+  selCard = results[i];
+  selFin = selCard.finishes[0];
+  document.querySelectorAll('.rc').forEach((el, j) => el.classList.toggle('sel', j === i));
+  const c = selCard;
+  document.getElementById('sel-img').src = c.images?.thumb || c.images?.small || '';
+  document.getElementById('sel-name').textContent = c.name;
+  showSel();
+  document.getElementById('sel-area').classList.remove('hidden');
+  document.getElementById('add-ok').disabled = false;
+}
+function pickFin(f) { if (selCard?.finishes.includes(f)) { selFin = f; showSel(); } }
+
+/* ── Set autocomplete ─────────────────────────────────────── */
+function onSetInput() {
+  clearTimeout(ssT);
+  ssT = setTimeout(() => {
+    showSetDrop();
+    const set = findSet(document.getElementById('set-in').value);
+    if (set && !document.getElementById('name-in').value.trim()) browseSet(set);
+  }, 250);
+}
+
+const setHit = (s, v) => s.name.toLowerCase().includes(v) || s.id === v;
+function showSetDrop() {
+  const v  = document.getElementById('set-in').value.trim().toLowerCase();
+  const dd = document.getElementById('set-drop');
+  if (!v || !allSets.length) { dd.classList.add('hidden'); return; }
+  setMatches = allSets.filter(s => setHit(s, v)).slice(0, 22);
+  if (!setMatches.length) { dd.classList.add('hidden'); return; }
+  dd.innerHTML = setMatches.map((s, i) =>
+    `<div class="acitem" onclick="pickSet(${i})">
+      <span>${esc(s.name)} <span style="color:var(--muted);font-size:.75em">${esc(s.id.toUpperCase())}</span></span>
+    </div>`
+  ).join('');
+  dd.classList.remove('hidden');
+}
+
+function pickSet(i) {
+  const s = setMatches[i];
+  document.getElementById('set-in').value = s.name;
+  document.getElementById('set-drop').classList.add('hidden');
+  const n = document.getElementById('name-in').value.trim();
+  if (n) doSearch(n); else browseSet(s);
+}
+
+/* ── Confirm add ──────────────────────────────────────────── */
+function doAdd() {
+  const b = ab(); if (!b || !selCard) return;
+  const entry = entryFrom(selCard, selCard.finishes.includes(selFin) ? selFin : selCard.finishes[0]);
+  const ti = addSlot !== null ? addSlot : nextEmpty(b);
+  while (b.slots.length <= ti) b.slots.push(null);
+  b.slots[ti] = entry;
+  pg = Math.floor(ti / spp(b));
+  save(); renderAll(); closeM('m-add');
+}
+
+/* ── Detail modal ─────────────────────────────────────────── */
+let detIdx = -1;
+function detStep(d) {
+  const b = ab(); if (!b) return;
+  const list = viewList(b);
+  const next = d > 0 ? list.find(i => i > detIdx) : [...list].reverse().find(i => i < detIdx);
+  if (next !== undefined) openDetail(next);
+}
+
+/* Price for one printing in its finish: TCGplayer USD from Scryfall; when there is none, Cardmarket EUR converted
+   to USD (est). link is the printing's TCGplayer page from Scryfall. */
+const USD_KEY = { nonfoil: 'usd', foil: 'usd_foil', etched: 'usd_etched' };
+const EUR_KEY = { nonfoil: 'eur', foil: 'eur_foil' };   // Scryfall has no etched EUR price
+function priceOf(j, finish, fx) {
+  const p = j?.prices || {}, link = j?.purchase_uris?.tcgplayer || '';
+  const u = parseFloat(p[USD_KEY[finish] || 'usd']);
+  if (u >= 0) return { v: u, est: false, link };
+  const e = parseFloat(p[EUR_KEY[finish]]);
+  if (e >= 0 && fx) return { v: e * fx, est: true, link };
+  return { v: null, est: false, link };
+}
+const hasEur = (j, finish) => parseFloat(j?.prices?.[EUR_KEY[finish]]) >= 0;
+const usd = n => n == null ? '–' : `$${n.toFixed(2)}`;
+const tcgSearch = c => `https://www.tcgplayer.com/search/magic/product?q=${encodeURIComponent(c.name)}`;
+/* EUR -> USD for Cardmarket prices: daily rate from frankfurter.dev, cached; an old cached rate beats none */
+const SK_FX = 'mnFx1';
+async function eurUsd() {
+  let c = null;
+  try { c = JSON.parse(localStorage.getItem(SK_FX) || 'null'); } catch {}
+  if (c && Date.now() - c.ts < 24 * 60 * 60 * 1000) return c.rate;
+  try {
+    const r = (await (await fetch('https://api.frankfurter.dev/v1/latest?base=EUR&symbols=USD')).json()).rates?.USD;
+    if (r > 0) { try { localStorage.setItem(SK_FX, JSON.stringify({ ts: Date.now(), rate: r })); } catch {} return r; }
+  } catch {}
+  return c?.rate || null;
+}
+
+async function showPrice(c, idx) {
+  const el = document.getElementById('det-price');
+  el.textContent = c.scryfallId ? 'Loading price…' : '';
+  if (!c.scryfallId) return;
+  let j = null;
+  try { j = await cardDetail(c.scryfallId); } catch {}
+  if (detIdx !== idx) return;   // moved on to another card
+  let p = priceOf(j, c.finish, null);
+  if (p.v == null && hasEur(j, c.finish)) {
+    const fx = await eurUsd();
+    if (detIdx !== idx) return;
+    p = priceOf(j, c.finish, fx);
+  }
+  const link = p.link || tcgSearch(c);
+  const a = `<a href="${esc(link)}" target="_blank" rel="noopener">${p.link ? (p.v == null ? 'View on TCGplayer' : 'Buy on TCGplayer') : 'Search TCGplayer'} ↗</a>`;
+  el.innerHTML = p.v == null ? `No price listed<br>${a}`
+    : p.est ? `≈ <b>${usd(p.v)}</b> Cardmarket, converted to USD<br>${a}`
+    : `<b>${usd(p.v)}</b> TCGplayer market<br>${a}`;
+}
+
+/* Double-faced cards: the popup starts on the front; the flip button shows the back */
+let detBack = false;
+function setDetImg(c) {
+  const di = document.getElementById('det-img');
+  const small = detBack ? c.imageBack : cardImg(c, 'small');
+  const large = detBack ? c.imageBackLarge : cardImg(c, 'large');
+  di.classList.remove('land');
+  di.onload = () => imgLand(di);
+  di.onerror = () => { if (small && di.src !== small) di.src = small; };   // no big picture: use the small one
+  di.src = large || small || '';
+  const fb = document.getElementById('det-flip');
+  fb.classList.toggle('hidden', !c.imageBack);
+  fb.textContent = detBack ? '↻ Front' : '↻ Back';
+  fb.title = detBack ? 'Show the front face' : 'Show the back face';
+}
+function flipDet() {
+  const c = ab()?.slots[detIdx]; if (!c?.imageBack) return;
+  detBack = !detBack; setDetImg(c);
+}
+
+function openDetail(idx, keepFace) {
+  const b = ab(); if (!b) return;
+  const c = b.slots[idx];
+  if (Date.now() < noOpenUntil) return;
+  if (!c) { if (!RO) openAdd(idx); return; }
+  if (!keepFace || detIdx !== idx) detBack = false;
+  detIdx = idx;
+  const list = viewList(b);
+  const at = list.indexOf(idx);
+  document.getElementById('det-pos').textContent = at < 0 ? 'Not in this filter' : `${at + 1} of ${list.length}`;
+  document.getElementById('det-prev').disabled = !list.some(i => i < idx);
+  document.getElementById('det-next').disabled = !list.some(i => i > idx);
+  const dp = Math.floor((filtering() ? at : idx) / spp(b));
+  if (at >= 0 && dp !== pg) { pg = dp; renderBinder(); }   // keep the page behind the popup in step
+  setDetImg(c);
+  const need = c.owned === false, fin = c.finish && c.finish !== 'nonfoil' ? c.finish : '';
+  document.getElementById('det-wrap').className = 'detimgw' + (need ? ' need' : fin ? ` f-${fin}` : '');
+  document.getElementById('det-name').textContent = c.name;
+  const dt = document.getElementById('det-type');
+  dt.textContent = c.typeLine || ''; dt.classList.toggle('hidden', !c.typeLine);
+  document.getElementById('det-meta').textContent =
+    [c.set ? `${c.set}${c.setId ? ` (${c.setId.toUpperCase()})` : ''}` : '', c.number ? `#${c.number}` : '', rarLabel(c.rarity)].filter(Boolean).join(' · ');
+  document.getElementById('det-var').textContent = fin ? `✦ ${FL[fin] || fin}` : '';
+  showPrice(c, idx);
+  const own = document.getElementById('det-own');
+  own.textContent = c.owned === false ? '✓ Mark as Owned' : 'Mark as Needed';
+  own.onclick = () => {
+    c.owned = c.owned === false ? true : false;
+    save(); renderAll(); openDetail(idx, true);   // stay in the popup, on the same face
+  };
+  document.getElementById('det-rm').onclick = () => { removeCard(idx); closeM('m-det'); };
+  openM('m-det');
+}
+
+/* ── Quick actions: right-click (or long-press on a phone) a card ───────── */
+let noOpenUntil = 0;   // swallow the tap that ends a long-press
+const ctxEl = () => document.getElementById('ctx');
+
+function hideCtx() { ctxEl().classList.add('hidden'); }
+
+function openCtx(idx, x, y) {
+  const b = ab(); const c = b?.slots[idx]; if (!c || RO) return;
+  const need = c.owned === false;
+  const el = ctxEl();
+  el.innerHTML = `<div class="hd">${esc(c.name)}${c.number ? ' #' + esc(c.number) : ''}</div>
+    <button data-a="own"><span class="ico">${need ? '✓' : '○'}</span>${need ? 'Mark as Owned' : 'Mark as Needed'}</button>
+    <button data-a="open"><span class="ico">🔍</span>Details…</button>
+    <button data-a="rm" class="danger"><span class="ico">✕</span>Remove Card</button>`;
+  el.onclick = e => {
+    const a = e.target.closest('button')?.dataset.a; if (!a) return;
+    hideCtx();
+    if (a === 'own')  { c.owned = need; save(); renderAll(); }   // need → owned (true), owned → need (false)
+    if (a === 'open') openDetail(idx);
+    if (a === 'rm')   removeCard(idx);
+  };
+  el.classList.remove('hidden');
+  const r = el.getBoundingClientRect();
+  el.style.left = Math.max(8, Math.min(x, innerWidth  - r.width  - 8)) + 'px';
+  el.style.top  = Math.max(8, Math.min(y, innerHeight - r.height - 8)) + 'px';
+  el.querySelector('button').focus({ preventScroll: true });
+}
+
+/* ── Rearranging: unlock the layout, then drag a card onto another slot ─────────────
+   Dropping on an empty slot moves the card; dropping on a filled one swaps the two. Hovering a dragged
+   card over the page arrows turns the page. The layout re-locks on every page load and while searching. */
+let rearr = false;
+function syncRearr() {
+  document.body.classList.toggle('rearr', rearr);
+  document.getElementById('rearr-btn').classList.toggle('on', rearr);
+  document.getElementById('rearr-ico').textContent = rearr ? '🔓' : '🔒';
+  document.getElementById('rearr-lbl').textContent = rearr ? 'Rearranging' : 'Layout locked';
+  document.getElementById('r-lock').textContent = rearr ? '🔓' : '🔒';
+  document.getElementById('r-lock').classList.toggle('on', rearr);
+  document.getElementById('rearr-btn').title = rearr ? 'Click to lock the layout again' : 'Layout is locked. Click to unlock and drag cards into new slots';
+}
+function toggleRearr() {
+  if (RO) return;
+  if (!rearr && filtering()) { showToast('Clear the search or filter first: rearranging needs the full page layout'); return; }
+  rearr = !rearr; hideCtx(); syncRearr();
+  if (rearr) showToast('Layout unlocked: drag a card onto another slot. Lock it again when you are done.');
+}
+
+function moveCard(from, to) {
+  const b = ab(); if (!b) return;
+  while (b.slots.length <= to) b.slots.push(null);
+  const a = b.slots[from], z = b.slots[to];
+  if (!a) return;
+  const swap = (arr, i, j) => { [arr[i], arr[j]] = [arr[j], arr[i]]; while (arr.length && !arr[arr.length - 1]) arr.pop(); };
+  swap(b.slots, from, to);
+  save(); renderAll();
+  showToast(z ? `Swapped ${a.name} and ${z.name}` : `Moved ${a.name}`, 'Undo', () => {
+    const bb = st.binders.find(x => x.id === b.id); if (!bb) return;
+    while (bb.slots.length <= Math.max(from, to)) bb.slots.push(null);
+    if (bb.slots[to]?.id !== a.id || (bb.slots[from]?.id || null) !== (z?.id || null)) { showToast('The layout has changed since'); return; }
+    swap(bb.slots, from, to); save(); renderAll();
+  });
+}
+
+(() => {
+  const cg = document.getElementById('cg');
+  let d = null;   // the drag in progress: { idx, x0, y0, on, ghost, over, btn, flipT }
+  const under = (x, y) => document.elementFromPoint(x, y);
+  const mark = el => { if (d.over !== el) { d.over?.classList.remove('drop-t'); d.over = el; el?.classList.add('drop-t'); } };
+  function end() {
+    if (!d) return;
+    clearTimeout(d.flipT); d.ghost?.remove(); d.over?.classList.remove('drop-t');
+    document.querySelectorAll('.drag-src').forEach(x => x.classList.remove('drag-src'));
+    document.body.classList.remove('drag-on');
+    d = null;
+  }
+  cg.addEventListener('dragstart', e => e.preventDefault());   // no browser-native picture dragging
+  cg.addEventListener('pointerdown', e => {
+    if (!rearr || filtering() || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    const el = e.target.closest('.slot-filled'); if (!el) return;
+    d = { idx: +el.dataset.idx, x0: e.clientX, y0: e.clientY, on: false, over: null, btn: null, flipT: 0, ghost: null };
+  });
+  addEventListener('pointermove', e => {
+    if (!d) return;
+    if (!d.on) {
+      if (Math.hypot(e.clientX - d.x0, e.clientY - d.y0) < 7) return;
+      const c = ab()?.slots[d.idx]; if (!c) { end(); return; }
+      d.on = true;
+      d.ghost = document.createElement('div');
+      d.ghost.className = 'drag-ghost';
+      d.ghost.innerHTML = `<img src="${esc(cardImg(c, 'small'))}" alt="">`;
+      document.body.appendChild(d.ghost);
+      document.body.classList.add('drag-on');
+      cg.querySelector(`[data-idx="${d.idx}"]`)?.classList.add('drag-src');
+    }
+    d.ghost.style.left = e.clientX + 'px'; d.ghost.style.top = e.clientY + 'px';
+    const hit = under(e.clientX, e.clientY);
+    const arrow = hit?.closest('#prev-btn,#next-btn,#r-prev,#r-next');
+    const slot = hit?.closest('#cg .slot');
+    mark(arrow && !arrow.disabled ? arrow : slot && +slot.dataset.idx !== d.idx ? slot : null);
+    const btn = arrow && !arrow.disabled && !(/next/.test(arrow.id) && arrow.classList.contains('add')) ? arrow : null;
+    if (btn !== d.btn) {
+      clearTimeout(d.flipT); d.btn = btn;
+      if (btn) {
+        const flip = () => {
+          goPage(/next/.test(btn.id) ? 1 : -1);
+          cg.querySelector(`[data-idx="${d.idx}"]`)?.classList.add('drag-src');
+          d.flipT = setTimeout(flip, 800);
+        };
+        d.flipT = setTimeout(flip, 600);
+      }
+    }
+  });
+  addEventListener('pointerup', e => {
+    if (!d) return;
+    if (d.on) {
+      noOpenUntil = Date.now() + 400;   // the drop must not also open the card
+      const slot = under(e.clientX, e.clientY)?.closest('#cg .slot');
+      const from = d.idx, to = slot ? +slot.dataset.idx : -1;
+      end();
+      if (to >= 0 && to !== from) moveCard(from, to);
+    } else end();
+  });
+  addEventListener('pointercancel', end);
+  addEventListener('keydown', e => { if (e.key === 'Escape' && d?.on) end(); });
+})();
+
+let toastT = null;
+function showToast(msg, actLabel, act) {
+  const t = document.getElementById('toast'), btn = document.getElementById('toast-act');
+  document.getElementById('toast-msg').textContent = msg;
+  btn.textContent = actLabel || ''; btn.classList.toggle('hidden', !actLabel);
+  btn.onclick = () => { t.classList.add('hidden'); act?.(); };
+  t.classList.remove('hidden');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => t.classList.add('hidden'), 7000);
+}
+
+/* Removing a card can be undone for a few seconds, from the popup or the quick menu */
+function removeCard(idx) {
+  const b = ab(); const card = b?.slots[idx]; if (!card) return;
+  b.slots[idx] = null;
+  while (b.slots.length && !b.slots[b.slots.length - 1]) b.slots.pop();   // keep the slot count tidy
+  save(); renderAll();
+  showToast(`Removed ${card.name}`, 'Undo', () => {
+    const bb = st.binders.find(x => x.id === b.id); if (!bb) return;
+    while (bb.slots.length <= idx) bb.slots.push(null);
+    if (bb.slots[idx]) { showToast('That slot has been filled since'); return; }
+    bb.slots[idx] = card; save(); renderAll();
+  });
+}
+
+(() => {
+  const cg = document.getElementById('cg');
+  cg.addEventListener('contextmenu', e => {
+    const el = e.target.closest('.slot-filled'); if (!el) return;
+    e.preventDefault();
+    openCtx(+el.dataset.idx, e.clientX, e.clientY);
+  });
+  // long-press for touch screens (iOS never sends a contextmenu event)
+  let t = null, x0 = 0, y0 = 0;
+  cg.addEventListener('touchstart', e => {
+    const el = e.target.closest('.slot-filled');
+    if (!el || rearr || e.touches.length !== 1) return;
+    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+    clearTimeout(t);
+    t = setTimeout(() => { noOpenUntil = Date.now() + 800; navigator.vibrate?.(15); openCtx(+el.dataset.idx, x0, y0); }, 480);
+  }, { passive: true });
+  cg.addEventListener('touchmove', e => {
+    const p = e.touches[0];
+    if (Math.hypot(p.clientX - x0, p.clientY - y0) > 10) clearTimeout(t);
+  }, { passive: true });
+  ['touchend', 'touchcancel'].forEach(ev => cg.addEventListener(ev, () => clearTimeout(t)));
+  // swipe left or right across the page to turn it (not while rearranging: that drag moves cards)
+  let sw = null;
+  cg.addEventListener('touchstart', e => {
+    sw = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() } : null;
+  }, { passive: true });
+  cg.addEventListener('touchend', e => {
+    const s0 = sw; sw = null;
+    if (!s0 || rearr || Date.now() - s0.t > 700) return;
+    const p = e.changedTouches[0], dx = p.clientX - s0.x, dy = p.clientY - s0.y;
+    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    noOpenUntil = Date.now() + 400;
+    goPage(dx < 0 ? 1 : -1);
+  });
+  // close on any press outside the menu, on scroll, resize or Escape
+  document.addEventListener('pointerdown', e => { if (!e.target.closest('#ctx')) hideCtx(); });
+  addEventListener('scroll', hideCtx, true);
+  addEventListener('resize', hideCtx);
+  addEventListener('blur', hideCtx);
+})();
+
+/* ── Binder value ─────────────────────────────────────────────
+   Prices are only looked up when the button is pressed, 75 cards per Scryfall request, and kept for the session. */
+const progressHtml = (n, total) => `<p class="vnote">Looking up prices for ${total} card${total > 1 ? 's' : ''}…</p>
+  <div class="vbar"><i style="width:${Math.round(n / total * 100)}%"></i></div><p class="vnote">${n} of ${total}</p>`;
+/* the EUR rate, only when some card needs it */
+const fxFor = async (cards, got) => cards.some(c => priceOf(got.get(c.scryfallId), c.finish).v == null && hasEur(got.get(c.scryfallId), c.finish)) ? eurUsd() : null;
+
+let valRun = 0;
+async function openValue() {
+  const b = ab(); if (!b) return;
+  const run = ++valRun;
+  const body = document.getElementById('val-body');
+  const cards = b.slots.filter(c => c && c.scryfallId);
+  const ids = [...new Set(cards.map(c => c.scryfallId))];
+  openM('m-val');
+  if (!cards.length) { body.innerHTML = '<p class="vnote">No cards in this binder yet.</p>'; return; }
+  body.innerHTML = progressHtml(0, ids.length);
+  const got = await fetchDetails(ids, () => run === valRun, n => { body.innerHTML = progressHtml(n, ids.length); });
+  if (run !== valRun) return;   // closed or restarted
+  const fx = await fxFor(cards, got);
+  if (run !== valRun) return;
+  let own = 0, need = 0, nOwn = 0, nNeed = 0, none = 0, nEst = 0;
+  const priced = [];
+  for (const c of b.slots) {
+    if (!c) continue;
+    const p = c.scryfallId ? priceOf(got.get(c.scryfallId), c.finish, fx) : { v: null };
+    if (p.v == null) { none++; continue; }
+    const isNeed = c.owned === false;
+    if (isNeed) { need += p.v; nNeed++; } else { own += p.v; nOwn++; }
+    if (p.est) nEst++;
+    priced.push({ c, v: p.v, isNeed, est: p.est });
+  }
+  priced.sort((a, z) => z.v - a.v);
+  const top = priced.slice(0, 5).map(({ c, v, isNeed, est }) =>
+    `<div class="vrow${isNeed ? ' need' : ''}"><span>${esc(c.name)} ${c.number ? '#' + esc(c.number) : ''}${c.finish && c.finish !== 'nonfoil' ? ' · ' + esc(FL[c.finish] || c.finish) : ''}${isNeed ? ' (need)' : ''}</span><b>${est ? '≈ ' : ''}${usd(v)}</b></div>`).join('');
+  body.innerHTML = `
+    <div class="vtot">
+      <span>Collected (${nOwn} card${nOwn === 1 ? '' : 's'})</span><b>${usd(own)}</b>
+      ${nNeed ? `<span>Still to get (${nNeed})</span><b>${usd(need)}</b>` : ''}
+      ${nNeed ? `<span class="vsum">Whole binder</span><b class="vsum">${usd(own + need)}</b>` : ''}
+    </div>
+    ${top ? `<div class="vtop"><h4>Most valuable</h4>${top}</div>` : ''}
+    <p class="vnote">TCGplayer market prices, via Scryfall (updated about once a day).${nEst ? ` ${nEst} card${nEst === 1 ? ' has' : 's have'} no TCGplayer price, so Cardmarket's price converted to USD is counted instead (marked ≈).` : ''}${none ? ` ${none} card${none === 1 ? ' has' : 's have'} no price and ${none === 1 ? 'is' : 'are'} not counted.` : ''}</p>`;
+}
+
+/* ── Shopping list: the cards marked Need, with prices and buy links ── */
+let shopRun = 0, shopRows = [], shopReady = false;
+
+async function openShop() {
+  const b = ab(); if (!b) return;
+  const run = ++shopRun;
+  const need = b.slots.filter(c => c && c.owned === false);
+  // the same printing + finish twice becomes one row with a quantity
+  const byKey = new Map();
+  for (const c of need) {
+    const k = `${c.scryfallId || c.name + c.number}|${c.finish}`;
+    if (byKey.has(k)) byKey.get(k).qty++;
+    else byKey.set(k, { c, qty: 1, order: byKey.size, price: null, link: '' });
+  }
+  shopRows = [...byKey.values()];
+  shopReady = false;
+  const ids = [...new Set(shopRows.map(r => r.c.scryfallId).filter(Boolean))];
+  openM('m-shop');
+  renderShop(`Looking up prices… 0 of ${ids.length}`);
+  if (!shopRows.length) return;
+  const got = await fetchDetails(ids, () => run === shopRun, n => renderShop(`Looking up prices… ${n} of ${ids.length}`));
+  if (run !== shopRun) return;
+  const fx = await fxFor(need, got);
+  if (run !== shopRun) return;
+  for (const r of shopRows) {
+    const p = r.c.scryfallId ? priceOf(got.get(r.c.scryfallId), r.c.finish, fx) : { v: null, link: '' };
+    r.price = p.v; r.est = !!p.est; r.link = p.link || '';
+  }
+  shopReady = true;
+  renderShop();
+}
+
+function renderShop(loading) {
+  const list = document.getElementById('shop-list'), sum = document.getElementById('shop-sum');
+  const total = shopRows.reduce((n, r) => n + r.qty, 0);
+  if (!shopRows.length) {
+    sum.textContent = '';
+    list.innerHTML = '<p class="vnote">Nothing to get in this binder. Cards you mark as <b>Need</b>, or a set you add with <b>All Needed</b>, will show up here.</p>';
+    return;
+  }
+  const sort = document.getElementById('shop-sort').value;
+  const rows = [...shopRows].sort(sort === 'price' && shopReady ? (a, z) => (z.price ?? -1) - (a.price ?? -1)
+    : sort === 'name' ? (a, z) => a.c.name.localeCompare(z.c.name) || a.order - z.order
+    : (a, z) => a.order - z.order);
+  const est = shopRows.reduce((n, r) => n + (r.price || 0) * r.qty, 0);
+  const unpriced = shopRows.filter(r => r.price == null).reduce((n, r) => n + r.qty, 0);
+  const nEst = shopRows.filter(r => r.est).reduce((n, r) => n + r.qty, 0);
+  sum.innerHTML = loading ? esc(loading)
+    : `<b>${total.toLocaleString()}</b> card${total === 1 ? '' : 's'} to get · about <b>${usd(est)}</b> at TCGplayer market${nEst ? ` (${nEst} estimated from Cardmarket, marked ≈)` : ''}${unpriced ? ` (${unpriced} without a price)` : ''}`;
+  list.innerHTML = rows.map(r => {
+    const c = r.c;
+    const fin = c.finish && c.finish !== 'nonfoil' ? ` · ${esc(FL[c.finish] || c.finish)}` : '';
+    const price = !shopReady ? '…' : r.price != null ? `<b>${r.est ? '≈ ' : ''}${usd(r.price)}</b>${r.qty > 1 ? ` <span>× ${r.qty}</span>` : ''}` : '<span>no price</span>';
+    return `<div class="shop-row"><div class="shop-main"><b>${esc(c.name)}</b>${r.qty > 1 && r.price == null ? ` × ${r.qty}` : ''}<span>${c.number ? '#' + esc(c.number) + ' · ' : ''}${esc(c.set || '')}${fin}</span></div>
+      <div class="shop-price">${price}<a href="${esc(r.link || tcgSearch(c))}" target="_blank" rel="noopener">${r.link ? 'Buy' : 'Search'} ↗</a></div></div>`;
+  }).join('');
+}
+
+/* One line per card in the common deck-list form ("2 Lightning Bolt (M10) 146 *F*"), which most Magic sites can import */
+async function copyShop() {
+  const text = shopRows.map(r => `${r.qty} ${r.c.name}${r.c.setId ? ` (${r.c.setId.toUpperCase()})` : ''}${r.c.number ? ' ' + r.c.number : ''}${r.c.finish === 'foil' ? ' *F*' : r.c.finish === 'etched' ? ' *E*' : ''}`).join('\n');
+  const btn = document.getElementById('shop-copy');
+  try { await navigator.clipboard.writeText(text); btn.textContent = 'Copied ✓'; }
+  catch { btn.textContent = 'Copy failed'; }
+  setTimeout(() => { btn.textContent = 'Copy list'; }, 1800);
+}
+
+/* ── New binder ───────────────────────────────────────────── */
+function openNewBinder() {
+  newPre = { r:3, c:3 };
+  document.getElementById('new-name').value = '';
+  document.querySelectorAll('.pre').forEach(b =>
+    b.classList.toggle('on', +b.dataset.r === 3 && +b.dataset.c === 3));
+  openM('m-new');
+  setTimeout(() => document.getElementById('new-name').focus(), 60);
+}
+
+function pickPre(btn) {
+  document.querySelectorAll('.pre').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  newPre = { r: +btn.dataset.r, c: +btn.dataset.c };
+}
+
+function doCreate() {
+  const name = document.getElementById('new-name').value.trim() || 'New Binder';
+  const b    = mkBinder(name, newPre.r, newPre.c);
+  st.binders.push(b); st.activeId = b.id; pg = 0;
+  save(); renderAll(); closeM('m-new');
+}
+
+/* ── Settings ─────────────────────────────────────────────── */
+function openSettings() {
+  const b = ab(); if (!b) return;
+  document.getElementById('set-name').value = b.name;
+  tR = b.rows; tC = b.cols; updDim();
+  openM('m-set');
+}
+
+function chDim(d, delta) {
+  if (d === 'r') tR = Math.max(1, Math.min(8, tR + delta));
+  else           tC = Math.max(1, Math.min(8, tC + delta));
+  updDim();
+}
+
+function updDim() {
+  document.getElementById('dr').textContent  = tR;
+  document.getElementById('dc').textContent  = tC;
+  document.getElementById('dpp').textContent = tR * tC;
+}
+
+function doSave() {
+  const b = ab(); if (!b) return;
+  b.name = document.getElementById('set-name').value.trim() || b.name;
+  b.rows = tR; b.cols = tC; pg = 0;
+  save(); renderAll(); closeM('m-set');
+}
+
+/* In-app replacement for confirm(). Resolves true/false; typeToConfirm makes the user type a word first. */
+let confirmRes = null, confirmWord = '';
+function askConfirm({ title, body, confirmLabel = 'Confirm', typeToConfirm = '', altLabel = '', cancelLabel = 'Cancel' }) {
+  return new Promise(res => {
+    if (confirmRes) confirmRes(false);
+    confirmRes = res;
+    confirmWord = typeToConfirm;
+    document.getElementById('cfm-title').textContent = title;
+    document.getElementById('cfm-body').innerHTML = body;
+    document.getElementById('cfm-ok').textContent = confirmLabel;
+    document.getElementById('cfm-cancel').textContent = cancelLabel;
+    const alt = document.getElementById('cfm-alt');
+    alt.textContent = altLabel;
+    alt.classList.toggle('hidden', !altLabel);
+    document.querySelector('#m-confirm .cfm').classList.toggle('stack', !!altLabel);
+    document.getElementById('cfm-type').classList.toggle('hidden', !typeToConfirm);
+    document.getElementById('cfm-word').textContent = typeToConfirm;
+    const inp = document.getElementById('cfm-input');
+    inp.value = '';
+    cfmCheck();
+    openM('m-confirm');
+    (typeToConfirm ? inp : document.getElementById('cfm-cancel')).focus();
+  });
+}
+function cfmCheck() {
+  const ok = !confirmWord || document.getElementById('cfm-input').value.trim().toLowerCase() === confirmWord.trim().toLowerCase();
+  document.getElementById('cfm-ok').disabled = !ok;
+}
+function confirmOk() {
+  if (document.getElementById('cfm-ok').disabled) return;
+  const r = confirmRes; confirmRes = null;
+  closeM('m-confirm');
+  r?.(true);
+}
+
+function confirmAlt() {
+  const r = confirmRes; confirmRes = null;
+  closeM('m-confirm');
+  r?.('alt');
+}
+
+async function doDelBinder() {
+  const b = ab(); if (!b) return;
+  const n = b.slots.filter(Boolean).length;
+  const need = b.slots.filter(c => c && c.owned === false).length;
+  const ok = await askConfirm({
+    title: `Delete “${b.name}”?`,
+    body: n
+      ? `This permanently removes the binder and its <b>${n.toLocaleString()} card${n === 1 ? '' : 's'}</b>${need ? ` (including ${need.toLocaleString()} still to get)` : ''}. It can't be undone.`
+        + (sync.token ? '<span class="cfm-warn">Cloud sync is on, so it will be removed from your other devices too. The earlier version stays in your gist\'s revision history on GitHub.</span>' : '')
+      : 'This binder is empty. It will be removed.',
+    confirmLabel: 'Delete binder',
+    typeToConfirm: n ? b.name : '',
+  });
+  if (!ok || ab() !== b) return;
+  st.binders = st.binders.filter(x => x.id !== b.id);
+  st.activeId = st.binders[0]?.id || null;
+  pg = 0; save(); renderAll(); closeM('m-set');
+}
+
+/* ── Bulk add ─────────────────────────────────────────────── */
+async function openBulk() {
+  const b = ab();
+  if (!b) {
+    const go = await askConfirm({
+      title: 'Create a binder first',
+      body: 'Cards are added to a binder, and there are none yet.',
+      confirmLabel: 'Create a binder',
+    });
+    if (go) openNewBinder();
+    return;
+  }
+  bulkCards = []; bulkNeed.clear(); bulkVisible = []; bulkRarOn.clear(); bulkRevOn.clear();
+  bulkSetMatches = [];
+  document.getElementById('bulk-set-in').value = '';
+  document.getElementById('bulk-nums').value = '';
+  document.getElementById('bulk-status').textContent = 'Search for a set above to load its cards.';
+  ['bulk-bar','bcg','bulk-filters','bulk-set-drop'].forEach(id =>
+    document.getElementById(id).classList.add('hidden'));
+  document.getElementById('bulk-ok').disabled = true;
+  document.getElementById('bulk-ok').textContent = 'Add Selected';
+  openM('m-bulk');
+  setTimeout(() => document.getElementById('bulk-set-in').focus(), 60);
+}
+
+function onBulkSetInput() {
+  clearTimeout(bsT);
+  bsT = setTimeout(showBulkSetDrop, 150);
+}
+
+function showBulkSetDrop() {
+  const v  = document.getElementById('bulk-set-in').value.trim().toLowerCase();
+  const dd = document.getElementById('bulk-set-drop');
+  if (!v || !allSets.length) { dd.classList.add('hidden'); return; }
+  bulkSetMatches = allSets.filter(s => setHit(s, v)).slice(0, 22);
+  if (!bulkSetMatches.length) { dd.classList.add('hidden'); return; }
+  dd.innerHTML = bulkSetMatches.map((s, i) =>
+    `<div class="acitem" onclick="pickBulkSet(${i})">
+      <span>${esc(s.name)} <span style="color:var(--muted);font-size:.75em">${esc(s.id.toUpperCase())}</span></span>
+    </div>`
+  ).join('');
+  dd.classList.remove('hidden');
+}
+
+function pickBulkSet(i) {
+  const s = bulkSetMatches[i];
+  document.getElementById('bulk-set-in').value = s.name;
+  document.getElementById('bulk-set-drop').classList.add('hidden');
+  loadBulkCards(s.id);
+}
+
+let bulkSeq = 0;
+async function loadBulkCards(setId) {
+  const seq = ++bulkSeq;
+  bulkCards = []; bulkNeed.clear(); bulkVisible = [];
+  ['bulk-bar','bcg','bulk-filters'].forEach(id =>
+    document.getElementById(id).classList.add('hidden'));
+  document.getElementById('bulk-nums').value = '';
+  document.getElementById('bulk-ok').disabled = true;
+  document.getElementById('bulk-status').innerHTML = '<span class="spin"></span>Loading cards…';
+  try {
+    const cards = await fetchSetCards(setId);
+    if (seq !== bulkSeq) return;
+    bulkCards = cards;
+    initBulkFilters();
+  } catch (e) {
+    if (seq === bulkSeq) document.getElementById('bulk-status').textContent = `Error: ${e.message}`;
+  }
+}
+
+/* A card's own copy has its first finish: normal if the printing comes that way, else foil, else etched.
+   Cards printed both normal and foil can also get an extra foil copy (the "Foil" row, opt-in). */
+const baseFin = c => c.finishes[0];
+const foilExtra = c => c.finishes.includes('nonfoil') && c.finishes.includes('foil');
+const bulkBucket = c => RARITIES.includes(c.rarity) ? c.rarity : 'special';   // 'bonus' and anything unusual join Special
+
+function initBulkFilters() {
+  const counts = {}, foilCounts = {};
+  bulkCards.forEach(c => {
+    const k = bulkBucket(c);
+    counts[k] = (counts[k] || 0) + 1;
+    if (foilExtra(c)) foilCounts[k] = (foilCounts[k] || 0) + 1;
+  });
+  const label = k => k === 'special' ? 'Special / Bonus' : RARITY_LABEL[k];
+  const chips = (cnt, kind) => RARITIES.filter(k => cnt[k]).map(k =>
+    `<button class="rchip${kind === 'n' ? ' on' : ''}${kind === 'f' ? ' rev' : ''}" data-r="${esc(k)}" data-kind="${kind}" onclick="toggleBulkRarity(this)">${esc(label(k))} <span>${cnt[k]}</span></button>`
+  ).join('');
+  bulkRarOn = new Set(Object.keys(counts));
+  bulkRevOn = new Set();   // extra foils are opt-in so a plain add doesn't double up the set
+  document.getElementById('bulk-rchips').innerHTML = chips(counts, 'n');
+  document.getElementById('bulk-revchips').innerHTML = chips(foilCounts, 'f') ||
+    '<span class="bulk-none">No cards in this set come in both normal and foil</span>';
+  document.getElementById('bulk-filters').classList.remove('hidden');
+  applyBulkFilters();
+}
+
+function toggleBulkRarity(btn) {
+  const set = btn.dataset.kind === 'f' ? bulkRevOn : bulkRarOn;
+  const r = btn.dataset.r;
+  if (set.has(r)) set.delete(r); else set.add(r);
+  btn.classList.toggle('on', set.has(r));
+  applyBulkFilters();
+}
+
+/* "1-100, 125, 200-" → [[1,100],[125,125],[200,Infinity]]; blank → null (no filter) */
+function parseNumFilter(str) {
+  const out = [];
+  for (const part of str.split(',')) {
+    const t = part.trim();
+    let m;
+    if (!t) continue;
+    if ((m = t.match(/^(\d+)$/)))                    out.push([+m[1], +m[1]]);
+    else if ((m = t.match(/^(\d+)\s*[-–]\s*(\d+)$/))) out.push([Math.min(+m[1], +m[2]), Math.max(+m[1], +m[2])]);
+    else if ((m = t.match(/^(\d+)\s*[-–]$/)))         out.push([+m[1], Infinity]);
+    else if ((m = t.match(/^[-–]\s*(\d+)$/)))         out.push([0, +m[1]]);
+  }
+  return out.length ? out : null;
+}
+
+/* Filters define the selection: every matching entry is selected, the rest are hidden.
+   A card yields its own entry and, with the Foil row on, an extra foil copy right after it.
+   Collector numbers with a letter or symbol (123a, 45★) are filtered by their leading digits. */
+function applyBulkFilters() {
+  const ranges = parseNumFilter(document.getElementById('bulk-nums').value);
+  bulkVisible = [];
+  bulkCards.forEach((c, i) => {
+    if (ranges) {
+      const m = String(c.number).match(/^\d+/);
+      if (!m) return;
+      const n = +m[0];
+      if (!ranges.some(([lo, hi]) => n >= lo && n <= hi)) return;
+    }
+    const k = bulkBucket(c);
+    if (bulkRarOn.has(k))                 bulkVisible.push(`${i}:n`);
+    if (foilExtra(c) && bulkRevOn.has(k)) bulkVisible.push(`${i}:f`);
+  });
+  renderBulkGrid();
+}
+
+function renderBulkGrid() {
+  const status = document.getElementById('bulk-status');
+  if (!bulkCards.length) { status.textContent = 'Scryfall lists no paper cards for this set.'; return; }
+  const nFoil = bulkVisible.filter(k => k.endsWith(':f')).length;
+  status.textContent = bulkVisible.length
+    ? `${bulkVisible.length - nFoil} cards${nFoil ? ` + ${nFoil} foil copies` : ''} will be added. Click a card to grey it out (still to get).`
+    : `No cards match these filters (${bulkCards.length} in set)`;
+  document.getElementById('bcg').innerHTML = bulkVisible.map(key => {
+    const [i, kind] = key.split(':');
+    const c = bulkCards[+i];
+    const fin = kind === 'f' ? 'foil' : baseFin(c);
+    const img = c.images?.thumb || '';
+    return `<div class="bcard${bulkNeed.has(key) ? ' need' : ' sel'}"${fin !== 'nonfoil' ? ` data-fin="${esc(FL[fin])}"` : ''} data-k="${key}" onclick="toggleBCard('${key}')">
+      ${img
+        ? `<img src="${esc(img)}" alt="${esc(c.name)}" loading="lazy" onload="imgLand(this)">`
+        : `<div class="bcard-ph">${esc(c.name)}</div>`}
+      <div class="bcard-nm" title="${esc(c.name)}">#${esc(c.number)} ${esc(c.name)}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('bcg').classList.toggle('hidden', !bulkVisible.length);
+  document.getElementById('bulk-bar').classList.remove('hidden');
+  updateBulkCount();
+}
+
+function toggleBCard(key) {
+  if (bulkNeed.has(key)) bulkNeed.delete(key); else bulkNeed.add(key);
+  const el = document.querySelector(`.bcard[data-k="${key}"]`);
+  el?.classList.toggle('need', bulkNeed.has(key));
+  el?.classList.toggle('sel', !bulkNeed.has(key));
+  updateBulkCount();
+}
+
+/* owned = true: everything owned (greying out is then per card); false: start the whole set as "to get" */
+function markAllBulk(owned) {
+  bulkNeed = owned ? new Set() : new Set(bulkVisible);
+  document.querySelectorAll('.bcard').forEach(el => {
+    el.classList.toggle('need', bulkNeed.has(el.dataset.k));
+    el.classList.toggle('sel', !bulkNeed.has(el.dataset.k));
+  });
+  updateBulkCount();
+}
+
+function updateBulkCount() {
+  const n = bulkVisible.length;
+  const need = bulkVisible.filter(k => bulkNeed.has(k)).length;
+  document.getElementById('bulk-sel-count').innerHTML = `<b>${n - need}</b> owned · <b>${need}</b> to get`;
+  const btn = document.getElementById('bulk-ok');
+  btn.disabled = n === 0;
+  btn.textContent = n > 0 ? `Add ${n} Card${n > 1 ? 's' : ''}` : 'Add Cards';
+}
+
+function doBulkAdd() {
+  const b = ab(); if (!b) return;
+  let firstSlot = null;
+  for (const key of bulkVisible) {
+    const [i, kind] = key.split(':');
+    const card = bulkCards[+i];
+    const entry = entryFrom(card, kind === 'f' ? 'foil' : baseFin(card), !bulkNeed.has(key));
+    const ti = nextEmpty(b);
+    if (firstSlot === null) firstSlot = ti;
+    while (b.slots.length <= ti) b.slots.push(null);
+    b.slots[ti] = entry;
+  }
+  if (firstSlot !== null) pg = Math.floor(firstSlot / spp(b));
+  save(); renderAll(); closeM('m-bulk');
+}
+
+/* ── Modal helpers ────────────────────────────────────────── */
+function openM(id) { document.getElementById(id).classList.remove('hidden'); }
+function closeM(id) {
+  if (id === 'm-shop') shopRun++;   // stop any price lookup in progress
+  if (id === 'm-confirm' && confirmRes) { const r = confirmRes; confirmRes = null; r(false); }
+  if (id === 'm-val') valRun++;   // stop any price lookup in progress
+  document.getElementById(id).classList.add('hidden');
+  if (id === 'm-add')  ['set-drop', 'name-drop'].forEach(x => document.getElementById(x).classList.add('hidden'));
+  if (id === 'm-bulk') document.getElementById('bulk-set-drop').classList.add('hidden');
+}
+
+/* a press outside a suggestion list closes it */
+document.addEventListener('pointerdown', e => {
+  if (!e.target.closest('.acw')) document.querySelectorAll('.acdrop').forEach(d => d.classList.add('hidden'));
+});
+
+document.querySelectorAll('.overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) closeM(el.id); });
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !ctxEl().classList.contains('hidden')) { hideCtx(); return; }
+  if (e.key === 'Escape' && !document.getElementById('m-confirm').classList.contains('hidden')) { closeM('m-confirm'); return; }   // only the top dialog
+  if (e.key === 'Escape') ['m-confirm','m-add','m-det','m-new','m-set','m-bulk','m-sync','m-val','m-shop'].forEach(closeM);
+  if (e.key === '/' && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName) && !document.querySelector('.overlay:not(.hidden)')) {
+    const q = document.getElementById('f-q');
+    if (q && q.offsetParent) { e.preventDefault(); q.focus(); }
+    return;
+  }
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName)) return;
+  const d = e.key === 'ArrowLeft' ? -1 : 1;
+  if (!document.getElementById('m-det').classList.contains('hidden')) detStep(d);
+  else if (!document.querySelector('.overlay:not(.hidden)')) goPage(d);
+});
+
+/* ── Install as an app (PWA) ──────────────────────────────── */
+if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+let installEv = null;
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function showInstall() {
+  document.getElementById('install-btn').classList.toggle('hidden', isStandalone() || !(installEv || isIOS));
+  document.getElementById('r-install').classList.toggle('hidden', isStandalone() || !(installEv || isIOS));
+}
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEv = e; showInstall(); });
+addEventListener('appinstalled', () => { installEv = null; showInstall(); });
+async function installApp() {
+  if (installEv) {
+    installEv.prompt();
+    await installEv.userChoice;
+    installEv = null; showInstall();
+  } else {
+    askConfirm({ title: 'Add to your home screen', body: 'In Safari, tap the <b>Share</b> button, then choose <b>Add to Home Screen</b>.', confirmLabel: 'Got it' });
+  }
+}
+showInstall();
+
+/* ── Share link: a read-only snapshot of one binder, packed into the URL hash ─────────
+   Nothing is uploaded: the binder is compressed into the link itself (#share=...). Only what's needed to redraw
+   it travels (Scryfall id, finish, need flag, slot layout); the page that opens the link looks up names and
+   pictures on Scryfall, so links stay short. */
+const b64u = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 8192) s += String.fromCharCode(...u8.subarray(i, i + 8192)); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+const unb64u = t => Uint8Array.from(atob(t.replace(/-/g, '+').replace(/_/g, '/')), ch => ch.charCodeAt(0));
+async function pipeBytes(u8, stream) { return new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(stream)).arrayBuffer()); }
+const FIN_CODE = { nonfoil: 'n', foil: 'f', etched: 'e' }, CODE_FIN = { n: 'nonfoil', f: 'foil', e: 'etched' };
+
+function packBinder(b) {
+  return JSON.stringify({
+    v: 2, n: b.name, r: b.rows, c: b.cols, p: b.pages || 0,
+    s: b.slots.map(c => !c || !c.scryfallId ? 0 : [c.scryfallId, FIN_CODE[c.finish] || 'n', c.owned === false ? 0 : 1]),
+  });
+}
+function unpackBinder(d) {
+  if (d.v !== 2 || !Array.isArray(d.s)) throw new Error('unsupported');
+  const dim = x => Math.max(1, Math.min(8, x | 0));
+  return {
+    id: 'shared', name: String(d.n || 'Shared binder'), rows: dim(d.r), cols: dim(d.c), pages: d.p || undefined,
+    slots: d.s.map((a, i) => !Array.isArray(a) ? null : {
+      id: 'sh' + i, scryfallId: String(a[0]), name: '', set: '', setId: '', number: '', rarity: '',
+      finish: CODE_FIN[a[1]] || 'nonfoil', ...(a[2] ? {} : { owned: false }), imageSmall: '', imageLarge: '',
+    }),
+  };
+}
+async function encodeShare(b) {
+  const raw = new TextEncoder().encode(packBinder(b));
+  if (typeof CompressionStream === 'undefined') return 'p' + b64u(raw);   // old browser: uncompressed
+  return 'z' + b64u(await pipeBytes(raw, new CompressionStream('deflate-raw')));
+}
+async function decodeShare(tok) {
+  let raw = unb64u(tok.slice(1));
+  if (tok[0] === 'z') raw = await pipeBytes(raw, new DecompressionStream('deflate-raw'));
+  else if (tok[0] !== 'p') throw new Error('unknown format');
+  return unpackBinder(JSON.parse(new TextDecoder().decode(raw)));
+}
+
+async function shareBinder() {
+  const b = ab(); if (!b || RO) return;
+  let url;
+  try { url = `${location.origin}${location.pathname}#share=${await encodeShare(b)}`; }
+  catch { showToast("Couldn't build a share link in this browser"); return; }
+  const n = b.slots.filter(Boolean).length;
+  const long = url.length > 30000 ? ' It is a long link, so some chat apps may cut it off.' : '';
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast(`Link copied: ${n} card${n === 1 ? '' : 's'}, view only. Share again after you change the binder.${long}`);
+  } catch {
+    prompt('Copy this link (a read-only snapshot of the binder):', url);
+  }
+}
+
+async function initShared() {
+  document.body.classList.add('ro');
+  let b;
+  try { b = await decodeShare(SHARE_TOKEN); }
+  catch {
+    const e = document.getElementById('empty-msg');
+    e.querySelector('h2').textContent = "This link couldn't be read";
+    e.querySelector('p').innerHTML = 'It may have been cut off when it was shared. Ask for a fresh link, or <a href="./" style="color:#93c5fd">open your own binders</a>.';
+    renderAll();
+    return;
+  }
+  st = { binders: [b], activeId: b.id };
+  document.title = `${b.name} · ManaBinder`;
+  renderAll();
+  const got = await fetchDetails([...new Set(b.slots.filter(Boolean).map(c => c.scryfallId))]);
+  for (const c of b.slots) {
+    if (!c) continue;
+    const j = got.get(c.scryfallId);
+    if (!j) { c.name = 'Card not found'; continue; }
+    const e = entryFrom(toCard(j), c.finish);
+    delete e.id; delete e.addedAt;
+    Object.assign(c, e);
+  }
+  renderAll();
+}
+
+/* ── Cloud sync (private GitHub gist) ─────────────────────── */
+/* Whole-state sync: st.modified is stamped on every save. `sync.base` is the st.modified value at the
+   last successful sync, so we can tell which side changed since. If both did, the user picks a side. */
+const APP_VERSION = '2026.11.14.1';   // bump on every pushed change, so each device can show which copy it is running
+const SK_SYNC   = 'mnSync1';
+const GIST_DESC = 'manabinder data (do not edit)';
+const GIST_FILE = 'manabinder.json';
+let sync = { token: '', gistId: '', base: 0 };
+let syncBusy = false, syncT = null, syncLast = 0;
+
+function loadSync() {
+  try { Object.assign(sync, JSON.parse(localStorage.getItem(SK_SYNC) || '{}')); } catch {}
+}
+function saveSync() { try { localStorage.setItem(SK_SYNC, JSON.stringify(sync)); } catch {} }
+
+function setSync(state, msg) {
+  const btn = document.getElementById('sync-btn');
+  btn.dataset.state = state;
+  btn.title = `Cloud sync: ${msg}`;
+  document.getElementById('sync-st').textContent = document.getElementById('r-sync-st').textContent = { off: 'Off', idle: 'On', busy: 'Syncing…', error: 'Error' }[state] || '';
+  document.getElementById('r-more').classList.toggle('dot', state === 'error');
+  const on = !!sync.token;
+  document.getElementById('sync-off').classList.toggle('hidden', on);
+  document.getElementById('sync-on').classList.toggle('hidden', !on);
+  document.getElementById('sync-connect').classList.toggle('hidden', on);
+  document.getElementById('sync-now').classList.toggle('hidden', !on);
+  document.getElementById('sync-off-btn').classList.toggle('hidden', !on);
+  const stat = document.getElementById('sync-status');
+  stat.textContent = msg;
+  const err = document.getElementById('sync-err');
+  err.textContent = state === 'error' ? msg : '';
+  err.classList.toggle('hidden', state !== 'error');
+  if (state === 'error') stat.textContent = 'Not synced';
+}
+
+async function gh(path, opts = {}) {
+  const r = await fetch(`https://api.github.com${path}`, {
+    ...opts,
+    headers: {
+      Authorization: `Bearer ${sync.token}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+    },
+  });
+  if (r.status === 401) throw new Error('GitHub rejected the token. Create a new one and reconnect.');
+  if (r.status === 403 || r.status === 404) throw new Error(`GitHub refused the request (${r.status}). Check the token has the gist permission.`);
+  if (!r.ok) throw new Error(`GitHub error ${r.status}`);
+  return r.json();
+}
+
+async function findGist() {
+  for (let page = 1; page <= 5; page++) {
+    const list = await gh(`/gists?per_page=100&page=${page}`);
+    const hit = list.find(g => g.description === GIST_DESC && g.files?.[GIST_FILE]);
+    if (hit) return hit;
+    if (list.length < 100) break;
+  }
+  return null;
+}
+
+async function readRemote(id) {
+  const g = await gh(`/gists/${id}`);
+  const f = g.files?.[GIST_FILE];
+  if (!f) return null;
+  const text = f.truncated ? await (await fetch(f.raw_url)).text() : f.content;   // big files come back truncated
+  return JSON.parse(text);
+}
+
+async function writeRemote(data) {
+  const files = { [GIST_FILE]: { content: JSON.stringify(data) } };
+  if (sync.gistId) {
+    await gh(`/gists/${sync.gistId}`, { method: 'PATCH', body: JSON.stringify({ files }) });
+  } else {
+    const g = await gh('/gists', { method: 'POST', body: JSON.stringify({ description: GIST_DESC, public: false, files }) });
+    sync.gistId = g.id;
+  }
+}
+
+function applyRemote(remote) {
+  try { localStorage.setItem(SK + '.bak', localStorage.getItem(SK) || ''); } catch {}   // keep what we're replacing
+  st = remote;
+  if (!st.binders) st.binders = [];
+  if (!st.binders.some(b => b.id === st.activeId)) st.activeId = st.binders[0]?.id || null;
+  try { localStorage.setItem(SK, JSON.stringify(st)); } catch {}
+  pg = 0;
+  renderAll();
+}
+
+const fmtTime = t => t ? new Date(t).toLocaleString() : 'never';
+const countCards = d => (d.binders || []).reduce((n, b) => n + b.slots.filter(Boolean).length, 0);
+
+async function askConflict(remote) {
+  const r = await askConfirm({
+    title: 'Both changed since the last sync',
+    body: `<div class="cfm-cmp"><span>This device</span><b>${countCards(st).toLocaleString()} cards · changed ${esc(fmtTime(st.modified))}</b>
+        <span>Cloud</span><b>${countCards(remote).toLocaleString()} cards · changed ${esc(fmtTime(remote.modified))}</b></div>
+      <span class="cfm-opt"><b>Use cloud copy</b> replaces what's on this device.</span>
+      <span class="cfm-opt"><b>Keep this device</b> overwrites the cloud. The old cloud version stays in your gist's revision history.</span>`,
+    confirmLabel: 'Use cloud copy',
+    altLabel: 'Keep this device',
+    cancelLabel: 'Decide later',
+  });
+  return r === true ? 'pull' : r === 'alt' ? 'push' : null;
+}
+
+async function syncNow(manual) {
+  if (!sync.token || syncBusy) return;
+  syncBusy = true;
+  setSync('busy', 'Syncing…');
+  try {
+    if (!sync.gistId) sync.gistId = (await findGist())?.id || '';
+    const remote = sync.gistId ? await readRemote(sync.gistId) : null;
+    const local = st.modified || 0, rmod = remote?.modified || 0;
+    let action;
+    if (!remote)                       action = 'push';   // nothing in the cloud yet
+    else if (rmod === local)           action = 'none';
+    else if (!sync.base && !st.binders.length)      action = 'pull';   // fresh device that has never synced
+    else if (!sync.base && !remote.binders?.length) action = 'push';   // brand-new empty gist
+    else {
+      const lc = local > sync.base, rc = rmod > sync.base;
+      action = lc && rc ? await askConflict(remote) : (rc ? 'pull' : 'push');
+      if (!action) throw new Error('Sync paused: this device and the cloud both changed. Choose which to keep to continue syncing.');
+    }
+    if (action === 'push') {
+      if (!st.modified) { st.modified = Date.now(); try { localStorage.setItem(SK, JSON.stringify(st)); } catch {} }
+      const sent = st.modified;
+      await writeRemote(st);
+      sync.base = sent;
+    } else if (action === 'pull') {
+      applyRemote(remote);
+      sync.base = st.modified || 0;
+    } else {
+      sync.base = local;
+    }
+    saveSync();
+    syncLast = Date.now();
+    setSync('idle', `Synced ${new Date().toLocaleTimeString()}`);
+  } catch (e) {
+    setSync('error', e.message || 'Sync failed');
+  } finally {
+    syncBusy = false;
+  }
+  if (sync.token && (st.modified || 0) > sync.base) queueSync();   // edited while syncing
+}
+
+function queueSync() {
+  if (!sync.token) return;
+  clearTimeout(syncT);
+  syncT = setTimeout(() => syncNow(), 3000);
+}
+
+function openSync() {
+  document.getElementById('app-ver').textContent = APP_VERSION;
+  document.getElementById('sync-token').value = '';
+  setSync(document.getElementById('sync-btn').dataset.state, document.getElementById('sync-btn').title.replace(/^Cloud sync: /, ''));
+  openM('m-sync');
+}
+
+async function syncConnect() {
+  const token = document.getElementById('sync-token').value.trim();
+  if (!token) return;
+  sync = { token, gistId: '', base: 0 };
+  await syncNow(true);
+  if (document.getElementById('sync-btn').dataset.state === 'error') {
+    const msg = document.getElementById('sync-err').textContent;
+    sync = { token: '', gistId: '', base: 0 };   // don't keep a token that didn't work
+    saveSync();
+    setSync('off', 'off');
+    const err = document.getElementById('sync-err');
+    err.textContent = msg; err.classList.remove('hidden');
+    return;
+  }
+  saveSync();
+}
+
+async function syncDisconnect() {
+  const ok = await askConfirm({
+    title: 'Disconnect cloud sync?',
+    body: 'This device stops syncing and forgets the token. Your binders stay on this device, and the copy in your gist is kept.',
+    confirmLabel: 'Disconnect',
+  });
+  if (!ok) return;
+  sync = { token: '', gistId: '', base: 0 };
+  saveSync();
+  setSync('off', 'off');
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && sync.token && Date.now() - syncLast > 30000) syncNow();
+});
+
+/* ── Util ─────────────────────────────────────────────────── */
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+/* ── Init ─────────────────────────────────────────────────── */
+if (RO) initShared();
+else {
+  load();
+  loadSync();
+  setSync(sync.token ? 'idle' : 'off', sync.token ? 'connected' : 'off');
+  if (sync.token) syncNow();
+  navigator.storage?.persist?.();   // ask the browser not to evict saved binders under storage pressure
+  loadSets();   // background: fetches and caches the set list for the set boxes
+  renderAll();
+}
+</script>
+</body>
+</html>
